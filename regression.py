@@ -5,14 +5,13 @@ from scipy import linalg
 #######################################################################
 def ridge_regression(X, y, lambdaParam):
     '''
-    computes the analytical solution to the ridge regression problem
+    Computes the analytical solution to the ridge regression problem
 
     Args:
-        :param X:
-        :param y:
-        :param lambdaParam:
+        :param X: (numpy.ndarray) features in NxK matrix 
+        :param y: (numpy.array) target/dependent variable Nx1
+        :param lambdaParam: (float) penalty parameter >= 0 
 
-    :return:
     '''
 
     n, m = X.shape
