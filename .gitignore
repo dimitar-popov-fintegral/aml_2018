@@ -1,0 +1,10 @@
+# Annoying Python objects #
+###########################
+
+__pychache__/
+*.pyc
+
+# Output folder contents #
+##########################
+
+output/
