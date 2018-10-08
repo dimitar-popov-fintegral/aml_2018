@@ -188,8 +188,9 @@ def regression(seed, start, end, step, cv=3, comment=''):
 	resid = y_train.values.flatten() - model_cv.predict(std_train)
 
 	##
-	logger.info('plotting of preliminary results')
+	logger.info('plotting of first stage results')
 	f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, figsize=(17,10))
+	f.suptitle('first stage')
 	ax1.plot(resid, 'bo')
 	tau = numpy.mean(resid) + 1.6 * numpy.std(resid)
 	mask = numpy.abs(resid) > tau
@@ -205,16 +206,18 @@ def regression(seed, start, end, step, cv=3, comment=''):
 	logger.info('use second lasso regression, removing large error inducing observations')
 	std_train_ = std_train[~mask]
 	y_train_ = y_train[~mask]
+	reg = LassoCV(alphas=alphas, cv=cv)
 	model_cv = reg.fit(std_train_.values, y_train_.values.flatten()) 
 	logger.info('alpha := {:f}'.format(float(model_cv.alpha_)))
 	pred = model_cv.predict(std_test)
-	resid = y_train.values.flatten() - model_cv.predict(std_train)
+	resid = y_train_.values.flatten() - model_cv.predict(std_train_)
 
 	##
-	logger.info('plotting of final results')
+	logger.info('plotting of second stage results')
 	f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, figsize=(17,10))
+	f.suptitle('second stage')
 	ax1.plot(resid, 'bo')
-	tau = numpy.mean(resid) + 2 * numpy.std(resid)
+	tau = numpy.mean(resid) + 1.6 * numpy.std(resid)
 	mask = numpy.abs(resid) > tau
 	ax1.plot([i if numpy.abs(i) > tau else None for i in resid], 'ro')
 	ax1.set_title('Residuals')
@@ -244,9 +247,9 @@ if __name__ == '__main__':
 
 	##
 	logger = logging.getLogger(__name__)
-	cv = 10
+	cv = 8
 	seed=0.2
-	start=0
+	start=0.55
 	end=1
 	step=0.01
 	regression(comment='seed_{}_-_start_{}_-_end_{}_-_step_{}_-_cv_{}'.format(seed, start, end, step, cv), seed=seed, start=start, end=end, step=step, cv=cv)
