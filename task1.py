@@ -40,9 +40,9 @@ def transform_data(X_train, X_test):
 	##
 	logger.info('standardize using mean and std. dev. of observed samples')
 	std_X_train = (X_train - scale_mean) / scale_std
-	std_X_test = (X_test - scale_mean) / scale_std	
+	std_X_test = (X_test - scale_mean) / scale_std
 
-
+	return std_X_train, std_X_test
 
 #######################################################################
 def gmm(X, model, n_components, prior, covariance_type):
@@ -155,38 +155,43 @@ def classification(comment=''):
 
 
 #######################################################################
-def regression(comment=''):
+def regression(seed, start, end, step, comment=''):
 
 	logger = logging.getLogger(__name__)
 
 	##
 	logger.info('read provided data')
 	X_test, X_train, y_train = read_data()
-	scale_mean = X_train.mean()
-	scale_std = X_train.std()
+	std_train, std_test,  = transform_data(X_train=X_train, X_test=X_test)
 
-	##
-	logger.info('standardize using mean and std. dev. of observed samples')
-	std_X_train = (X_train - scale_mean) / scale_std
-	std_X_test = (X_test - scale_mean) / scale_std
-	y_train.index = y_train.index.astype(int)
-	y_train.y = y_train.y.astype(int)
-	import pdb; pdb.set_trace()
+	# ##
+	# logger.info('basic pre-processing of class labels')
+	# check_obs_per_age = {i: sum(y_train.y == i) for i in y_train.y.unique()}
+	# remove_low_obs_per_age = {i: j for i, j in check_obs_per_age.items() if j < 7}
+	# mask = ~y_train.y.isin(remove_low_obs_per_age.keys())
 
-	## 
-	logger.info('basic pre-processing of class labels')
-	check_obs_per_age = {i: sum(y_train.y == i) for i in y_train.y.unique()}
-	remove_low_obs_per_age = {i: j for i, j in check_obs_per_age.items() if j < 7}
-	mask = ~y_train.y.isin(remove_low_obs_per_age.keys())
-
-	y_train = y_train[mask]
-	std_X_train = std_X_train[mask]
-	del mask
+	# y_train = y_train[mask]
+	# std_X_train = std_X_train[mask]
+	# del mask
 
 	##
 	logger.info('fill NaN with 0 i.e. the mean of the standardized random variables')
-	std_X_train.fillna(0, inplace=True)
-	std_X_test.fillna(0, inplace=True)
+	std_train.fillna(0.0, inplace=True)
+	std_test.fillna(0.0, inplace=True)
+
+	##
+	logger.info('use lasso regression with custom set of lambda parameters')
+	alphas = seed ** numpy.arange(start, end, step)
+	logger.info('alpha parameters := {}'.format(str(["{0:0.2f}".format(i) for i in alphas]).replace("'", "")))
+	reg = LassoCV(alphas=alphas)
+	model_cv = reg.fit(std_train.values, y_train.values.flatten())
+	logger.info('alpha := {:f}'.format(float(model_cv.alpha_)))
+	pred = model_cv.predict(std_test)
+
+	##
+	logger.info('write to pandas Series object')
+	write_to_file = pandas.Series(pred, index=X_test.index.astype(int), name='y')
+	write_to_file.to_csv(os.path.join(dt.output_dir(), 'task1_solution_{}.csv'.format(comment)), index=True, header=['y'], index_label=['id'])
 
 
 #######################################################################
@@ -201,5 +206,8 @@ if __name__ == '__main__':
 	ch.setFormatter(formatter)
 	root.addHandler(ch)	
 
-	regression('lasso_cv_regressio')
+	##
+	logger = logging.getLogger(__name__)
+	regression(comment='lasso_reg_with_even_larger_custom_alphas', seed=0.398107, start=0, end=1, step=0.01)
 	# classification('grid_search_CV')
+	logger.info('done')
