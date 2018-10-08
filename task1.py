@@ -1,21 +1,19 @@
 import os
 import sys
-
-THIS_DIR = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.join(THIS_DIR, '..'))
-
 import pandas
 import numpy
 import logging
-
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report,confusion_matrix
 from sklearn.linear_model import LassoCV
 from sklearn.metrics import mean_squared_error
-
+import matplotlib.pyplot as plt 
 import regression as dr
 import data as dt
+
+THIS_DIR = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.join(THIS_DIR, '..'))
 
 
 #######################################################################
@@ -155,7 +153,7 @@ def classification(comment=''):
 
 
 #######################################################################
-def regression(seed, start, end, step, comment=''):
+def regression(seed, start, end, step, cv=3, comment=''):
 
 	logger = logging.getLogger(__name__)
 
@@ -183,10 +181,48 @@ def regression(seed, start, end, step, comment=''):
 	logger.info('use lasso regression with custom set of lambda parameters')
 	alphas = seed ** numpy.arange(start, end, step)
 	logger.info('alpha parameters := {}'.format(str(["{0:0.2f}".format(i) for i in alphas]).replace("'", "")))
-	reg = LassoCV(alphas=alphas)
+	reg = LassoCV(alphas=alphas, cv=cv)
 	model_cv = reg.fit(std_train.values, y_train.values.flatten())
 	logger.info('alpha := {:f}'.format(float(model_cv.alpha_)))
 	pred = model_cv.predict(std_test)
+	resid = y_train.values.flatten() - model_cv.predict(std_train)
+
+	##
+	logger.info('plotting of preliminary results')
+	f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, figsize=(17,10))
+	ax1.plot(resid, 'bo')
+	tau = numpy.mean(resid) + 1.6 * numpy.std(resid)
+	mask = numpy.abs(resid) > tau
+	ax1.plot([i if numpy.abs(i) > tau else None for i in resid], 'ro')
+	ax1.set_title('Residuals')
+	ax2.scatter(model_cv.predict(std_train), y_train)
+	x0,x1 = ax2.get_xlim()
+	y0,y1 = ax2.get_ylim()
+	ax2.set_aspect((x1-x0)/(y1-y0))
+	ax2.set_title('Fitted vs. Actual')
+
+	##
+	logger.info('use second lasso regression, removing large error inducing observations')
+	std_train_ = std_train[~mask]
+	y_train_ = y_train[~mask]
+	model_cv = reg.fit(std_train_.values, y_train_.values.flatten()) 
+	logger.info('alpha := {:f}'.format(float(model_cv.alpha_)))
+	pred = model_cv.predict(std_test)
+	resid = y_train.values.flatten() - model_cv.predict(std_train)
+
+	##
+	logger.info('plotting of final results')
+	f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, figsize=(17,10))
+	ax1.plot(resid, 'bo')
+	tau = numpy.mean(resid) + 2 * numpy.std(resid)
+	mask = numpy.abs(resid) > tau
+	ax1.plot([i if numpy.abs(i) > tau else None for i in resid], 'ro')
+	ax1.set_title('Residuals')
+	ax2.scatter(model_cv.predict(std_train), y_train)
+	x0,x1 = ax2.get_xlim()
+	y0,y1 = ax2.get_ylim()
+	ax2.set_aspect((x1-x0)/(y1-y0))
+	ax2.set_title('Fitted vs. Actual')
 
 	##
 	logger.info('write to pandas Series object')
@@ -208,6 +244,13 @@ if __name__ == '__main__':
 
 	##
 	logger = logging.getLogger(__name__)
-	regression(comment='lasso_reg_with_even_larger_custom_alphas', seed=0.398107, start=0, end=1, step=0.01)
+	cv = 10
+	seed=0.2
+	start=0
+	end=1
+	step=0.01
+	regression(comment='seed_{}_-_start_{}_-_end_{}_-_step_{}_-_cv_{}'.format(seed, start, end, step, cv), seed=seed, start=start, end=end, step=step, cv=cv)
 	# classification('grid_search_CV')
+	plt.show()
+
 	logger.info('done')
