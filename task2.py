@@ -16,7 +16,22 @@ def read_data():
 	X_train = pandas.read_csv(os.path.join(dt.data_dir(), 'task2', 'X_train.csv'), header=0, index_col=0)
 	y_train = pandas.read_csv(os.path.join(dt.data_dir(), 'task2', 'y_train.csv'), header=0, index_col=0)
 
-	return X_test, X_train, y_train
+	y_train.y = y_train.y.astype(int)
+
+	X_validate = pandas.read_csv(os.path.join(dt.data_dir(), 'task2', 'X_validate.csv'), header=0, index_col=0) 
+	y_validate = pandas.read_csv(os.path.join(dt.data_dir(), 'task2', 'y_validate.csv'), header=0, index_col=0) 
+
+	y_validate.y = y_validate.y.astype(int)
+
+	assert y_validate.index.isin(X_validate.index).all(),\
+		'validation set variables y, X have differences in index -> aborting'
+
+	return \
+	X_test,\
+	X_train.reindex(index=X_train.index.difference(X_validate.index)),\
+	y_train.reindex(index=y_train.index.difference(y_validate.index)),\
+	X_validate,\
+	y_validate
 
 
 # def em_gmm_vect(xs, pis, mus, sigmas, tol=0.01, max_iter=100):
@@ -98,13 +113,35 @@ def gmm_classifier(x_train, pi, mu, sigma, tol=1e-7, max_iter=100):
 		##
 		logger.info('<-- E-Step: construct the expectation -->')
 		'''
-		Formulation:
-			- Want to obtain the posterior g( z_i = j | x_i )
-			- g( x_i ) = P( z_i = j | x_i ) = P(  x_i | z_i = j ) * P(  z_i = j | x_i ) / P( x_i )
-			- T_n+1 = SUM_i SUM_j g( x_i ) * log P(  x_i, z_i = j )
-			- 		= SUM_i SUM_j g( x_i ) * log pi_j * f_j( x_i; mu_j, sigma_j )
-			where T := set of parameters i.e. mu's and sigmas's
+		Formulation: Calculate the responsibilities g_j(x_i) = P( z_i == j| x_i )
+			- formally g_j(x_i) = A / B 
+				where A = P( x_i | z_i == j ) * P( z_i == j )
+					  B = SUM_{j<=k} P( x_i | z_i == j ) * P( z_i == j )  
+			- create the expectation function E_{Z|X} ln P( x_i, z_i == j )
+				where E_{Z|X} ln P( x_i, z_i == j ) = SUM P( z_i == j | x_i ) * ln P( x_i, z_i == j )
 		'''
+
+		responsibilities = numpy.zeros((k,n))
+		for j in range(k):
+			responsibilities[j,:] = pi[ij] * mvn(mu[j], sigma[j]).pdf(x_train)
+		
+		normalization = numpy.ones(k).T.dot(responsibilities).dot(numpy.ones(n))
+		responsibilities /= normalization
+
+		logger.info('<-- M-Step: maximize expectation w.r.t parameters T -->')
+		'''
+		Formulation: Find the ArgMax. w.r.t model parameters, using calculated responsibilities
+
+		By taking derivative w.r.t mu, sigma, pi of the expectation we found in E-step
+		we can find the new paramters as follows
+
+			- formally mu_j = SUM_{i<=n} g_j(x_i) * x_i
+					   sigma_j = SUM_{i<=n} g_j(x_i) (x_i - mu_j)'(x_i - mu_j) / SUM_{i<=n} g_j(x_i)
+					   pi_j = (1/n) * SUM_{i<=n} g_j(x_i) 
+		'''		
+
+
+
 		P = numpy.zeros((k,n))
 		for j in range(k):
 			P[j, :] = pi[j] * mvn(mu[j], sigma[j]).pdf(x_train)
