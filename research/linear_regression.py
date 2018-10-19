@@ -3,164 +3,253 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-from sklearn import linear_model
-from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.decomposition import PCA
-from sklearn.ensemble import ExtraTreesClassifier
-from scipy.stats.mstats import winsorize
 from scipy import stats
+import statsmodels.api as sm
+
+from statsmodels.graphics.regressionplots import plot_leverage_resid2
+from scipy.stats import zscore, norm
+from random import shuffle
 
 import data as dt
 from enum import Enum
 
 
 #######################################################################
-class CLEAN_MODE(Enum):
+class FILL_MODE(Enum):
     RESPONSE = 'RESPONSE'
     PREDICTORS = 'PREDICTORS'
-    ZERO = 'ZERO'
+    MEAN = 'MEAN'
 
 
 #######################################################################
-def clean_data(predictors, response, clean_mode):
+def clean_data(predictors, response, zscore_threshold, fill_mode):
+
+    idx = predictors.index
+    if response is None:
+        data = pd.DataFrame(columns=['y'], index=idx)
+    else:
+        data = pd.DataFrame(response)
+
+
+    r2 = pd.Series(index=predictors.columns)
 
     for p in predictors.columns:
-        pr = predictors[p].copy()
-        pr[abs(stats.zscore(pr.fillna(pr.mean()))) > 2] = np.nan
-        predictors[p] = pr
+        predictor = predictors[p]
+        predictor[abs(stats.zscore(predictor.fillna(predictor.mean()))) > zscore_threshold] = np.nan
 
-    std_predictors = (predictors-predictors.mean())/predictors.std()
-    fstd_predictors = std_predictors.fillna(0.0)
-
-    data = pd.DataFrame(response)
-    for p in predictors.columns:
-
-        std_predictor = std_predictors[p]
-        idx = predictors.index
-        missing_idx = idx[std_predictor.isnull()]
+        missing_idx = idx[predictor.isnull()]
         good_idx = idx.difference(missing_idx)
 
-        if clean_mode == CLEAN_MODE.ZERO:
-            print('filling missing predictor [%s] data with zero' % p)
-            filled = std_predictor.fillna(0)
+        if fill_mode == FILL_MODE.MEAN:
+            print('filling missing predictor [%s] data with mean' % p)
+            predictor = predictor.fillna(predictor.mean())
         else:
-            if clean_mode == CLEAN_MODE.PREDICTORS:
+            if fill_mode == FILL_MODE.PREDICTORS:
                 print('imputing predictor [%s] data based on other predictors' % p)
-                X_ = fstd_predictors.reindex(index=good_idx, columns=fstd_predictors.columns.difference([p]))
-                x_fill = fstd_predictors.reindex(index=missing_idx, columns=fstd_predictors.columns.difference([p]))
-
-            elif clean_mode == CLEAN_MODE.RESPONSE:
+                X = predictors.drop(p, axis=1)
+                X = X.fillna(X.mean())
+            elif fill_mode == FILL_MODE.RESPONSE:
                 print('imputing predictor [%s] data based on response' % p)
-                X_ = response.reindex(index=good_idx)
-                x_fill = response.reindex(index=missing_idx)
+                assert response is not None
+                X = response
             else:
                 raise ValueError("unexpected clean mode")
 
-            y_ = std_predictor.reindex(good_idx)
-            lm = linear_model.LinearRegression()
-            lm.fit(X_, y_)
-            y_fill = pd.Series(name=p, index=missing_idx, data=lm.predict(x_fill))
-            filled = pd.concat([y_, y_fill]).reindex(idx)
-            filled = (filled-filled.mean())/filled.std()
+            X = (X-X.mean()/X.std())
+            lm = sm.OLS(predictor.reindex(good_idx).values,
+                        sm.add_constant(X.reindex(good_idx).values)).fit()
+            r2[p] = lm.rsquared
+            r2.name = 'r2'
 
-        assert not filled.isnull().values.any()
-        assert all(filled.index == data.index)
-        data = data.join(filled)
+            missing = pd.Series(name=p, index=missing_idx,
+                                data=lm.predict(sm.add_constant(X.reindex(missing_idx).values)))
+            predictor = pd.concat([predictor.reindex(good_idx), missing]).reindex(idx)
 
-    return data
+        predictor = (predictor-predictor.mean())/predictor.std()
+        assert not predictor.isnull().values.any()
+        assert all(predictor.index == data.index)
+        data = data.join(predictor)
+
+    return data, r2
 
 
 #######################################################################
-## READ and CLEAN data
+def diags(response, predictors):
+    X = sm.add_constant(predictors.values)
+    Y = response.values
+    lm = sm.OLS(Y, X).fit()
+    return lm.rsquared, lm.aic, pd.Series(index=predictors.columns, data=lm.pvalues[1:])
+
+
+#######################################################################
+def select_aic(candidate_features, y, X):
+    test_features = list()
+    aic = 0
+    R2 = None
+    for feature in candidate_features:
+        test_features.append(feature)
+        new_R2, new_aic, pvals = diags(y, X[test_features])
+        if new_aic < aic:
+            test_features.remove(feature)
+        else:
+            aic = new_aic
+            R2 = new_R2
+
+    return R2, aic, test_features
+
+
+#######################################################################
+def filter_high_leverage(lm, y, X):
+
+    infl = lm.get_influence()
+    leverage = infl.hat_matrix_diag
+    resid = zscore(lm.resid)
+    alpha = .05
+    cutoff = norm.ppf(1.-alpha/2)
+
+    large_resid = np.abs(resid) > cutoff
+    lr_idx = pd.Series(large_resid)[large_resid].index
+    large_leverage = pd.Series(abs(stats.zscore(leverage))>1.0)
+    ll_idx = pd.Series(large_leverage)[large_leverage].index
+
+    idx = X.index.difference(ll_idx.intersection(lr_idx))
+
+    y = y.reindex(idx)
+    X = X.reindex(idx)
+
+    return y, X
+
+
+#######################################################################
+def run(SAMPLE_SIZE, PCA_N, PV, AIC, features, train_data):
+
+    y = train_data.loc[0:SAMPLE_SIZE, 'y']
+    X = train_data.loc[0:SAMPLE_SIZE, features]
+
+    y_hat = train_data.loc[SAMPLE_SIZE:, 'y']
+    X_hat = train_data.loc[SAMPLE_SIZE:, features]
+
+    if AIC is not None:
+        candidate_features = list(features)
+        R2, aic, features = select_aic(candidate_features, y, X)
+        print("Selected %s features, R2[%s], AIC[%s]" % (len(features), R2, aic))
+        for i in range(AIC):
+            shuffle(candidate_features)
+            new_R2, aic, new_features = select_aic(candidate_features, y, X)
+            if new_R2 > R2:
+                R2 = new_R2
+                features = new_features
+                print("Selected %s features, R2[%s], AIC[%s]" % (len(features), R2, aic))
+
+
+    if PV is not None:
+        R2, aic, pvals = diags(response, X[features])
+        features = pvals[pvals<PV].index
+
+    print("Proceed with %s features" % len(features))
+    X = X[features]
+    X_hat = X_hat[features]
+
+    lm = sm.OLS(y, sm.add_constant(X)).fit()
+    print("Train regression:\n%s" % lm.summary())
+    y, X = filter_high_leverage(lm, y, X)
+    lm = sm.OLS(y, sm.add_constant(X)).fit()
+    print("Re-train regression:\n%s" % lm.summary().tables[0])
+
+
+    if PCA_N > 0:
+        pca = PCA(n_components=min(PCA_N, len(features)))
+        pca.fit(X)
+        ev = pca.explained_variance_ratio_
+        print("Explained variance: %s, (total: %s)" % (ev, sum(ev)))
+        X = pca.transform(X)
+        if len(X_hat) > 0:
+            X_hat = pca.transform(X_hat)
+
+        lm = sm.OLS(y, sm.add_constant(X)).fit()
+        print("Regression on PCA:\n%s" % lm.summary().tables[0])
+        #y, X = filter_high_leverage(lm, y, X)
+        lm = sm.OLS(y, sm.add_constant(X)).fit()
+        print("Re-train regression on PCA:\n%s" % lm.summary().tables[0])
+
+
+    if len(y_hat) > 0:
+        y_test_hat = lm.predict(sm.add_constant(X_hat))
+
+        SS_tot=((y_hat - y_hat.mean())**2).sum()
+        SS_res=((y_test_hat-y_hat)**2).sum()
+
+        print("R2 (out of sample): %s" % (1-(SS_res/SS_tot)))
+
+
+        mpl.style.use('bmh')
+        plt.figure()
+        plt.plot(y_test_hat - y_hat, 'o')
+        plt.title('Residuals')
+
+        plt.figure()
+        plt.scatter(y_test_hat, y_hat, color='black')
+        plt.title('Predicted vs. Actual')
+
+        y_test = lm.predict(sm.add_constant(X))
+        plt.figure()
+        plt.scatter(y_test, y, color='black')
+        plt.title('Predicted vs. Actual (in sample)')
+
+        fig, ax = plt.subplots   (figsize=(8,6))
+        fig = plot_leverage_resid2(lm, ax = ax)
+
+        plt.show()
+
+
+
+#######################################################################
+## DATA CLEAN setup
 #######################################################################
 
-predictors = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'X_train.csv'), header=0, index_col=0)
-zero_variance = predictors.columns[predictors.describe().transpose()['std']<1e-6]
-predictors = predictors.reindex(columns=predictors.columns.difference(zero_variance))
-test_predictors = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'X_test.csv'), header=0, index_col=0)
-
-response = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'y_train.csv'), header=0, index_col=0)
-
-train_data = clean_data(predictors, response, clean_mode=CLEAN_MODE.RESPONSE)
-predict_data = clean_data(test_predictors, pd.DataFrame(index=test_predictors.index, columns=['y'], data=0), clean_mode=CLEAN_MODE.ZERO)
+T_FILL=FILL_MODE.RESPONSE
+P_FILL=FILL_MODE.PREDICTORS
+Z = 2.5
+RELOAD = False
 
 
 #######################################################################
 ## RUN REGRESSION
 #######################################################################
 
-in_sample_cnt = 1200
-pca_num_components = None
-importance_threshold = 0.0015
-predict = True
 
-y = train_data[response.columns].values
-y_ = y[0:in_sample_cnt]
-y_test = y[in_sample_cnt:]
+if __name__ == "__main__":
 
-if importance_threshold is not None:
-    model = ExtraTreesClassifier()
-    model.fit(train_data[predictors.columns].values, train_data[response.columns].values)
-    importance = pd.Series(index=predictors.columns, data=model.feature_importances_)
-    features = importance[importance >= importance_threshold].index
-else:
-    features = predictors.columns
+    predictors = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'X_train.csv'), header=0, index_col=0)
+    zero_variance = predictors.columns[predictors.describe().transpose()['std']<1e-6]
+    predictors = predictors.reindex(columns=predictors.columns.difference(zero_variance))
+    all_features = predictors.columns
 
-print("Using %d features" % len(features))
-X = train_data[features].values
-X_predict = predict_data[features].values
-X_train = X[0:in_sample_cnt]
-X_test = X[in_sample_cnt:]
+    test_predictors = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'X_test.csv'), header=0, index_col=0).reindex(columns=all_features)
+    response = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'y_train.csv'), header=0, index_col=0)
 
+    train_data_fname = 'train_data_F_%s-Z_%s.csv' % (T_FILL, Z)
+    train_data_r2_fname = 'train_data_r2_F_%s-Z_%s.csv' % (T_FILL, Z)
+    if RELOAD:
+        train_data, train_data_r2 = clean_data(predictors, response, zscore_threshold=Z, fill_mode=T_FILL)
+        train_data.to_csv(os.path.join(dt.output_dir(), train_data_fname), index=True, header=True)
+        train_data_r2.to_csv(os.path.join(dt.output_dir(), train_data_r2_fname), index=True, header=True)
 
-if pca_num_components is not None:
-    pca = PCA(n_components=min(pca_num_components, len(features)))
-    pca.fit(X_train)
-    ev = pca.explained_variance_ratio_
-    print("Explained variance: %s, (total: %s)" % (ev, sum(ev)))
-    X_train = pca.transform(X_train)
-    X_predict = pca.transform(X_predict)
-    if len(X_test) > 0:
-        X_test = pca.transform(X_test)
+    train_data = pd.read_csv(os.path.join(dt.output_dir(), train_data_fname), header=0, index_col=0)
+    train_data_r2 = pd.read_csv(os.path.join(dt.output_dir(), train_data_r2_fname), header=0, index_col=0)['r2']
+
+    features = train_data_r2.sort_values(ascending=False).head(400).index
+    SAMPLE_SIZE = 1000
+    PCA_N = 120
+    PV = None
+    AIC = None
 
 
-# Create linear regression object
-lm = linear_model.LinearRegression(normalize=True)
-# Train the model using the training sets
-lm.fit(X_train, y_)
-
-if predict:
-    comment = "PCA_%s_Importance_%s(%s)_DataCnt_%s" % (pca_num_components, importance_threshold, len(features), in_sample_cnt)
-
-    print('predict and write to pandas Series object')
-    y = lm.predict(X_predict)
-    write_to_file = pd.Series(y.flatten(), index=predict_data.index, name='y')
-    write_to_file.to_csv(os.path.join(dt.output_dir(), 'task1_solution_{}.csv'.format(comment)), index=True, header=['y'], index_label=['id'])
+    run(SAMPLE_SIZE, PCA_N, PV, AIC, features, train_data)
 
 
-if len(y_test) > 0:
 
-    # Make predictions using the testing set
-    y_fill = lm.predict(X_test)
-
-    # The coefficients
-    print('Coefficients: \n', lm.coef_)
-    # The mean squared error
-    print("Mean squared error: %.2f"
-          % mean_squared_error(y_test, y_fill))
-    # Explained variance score: 1 is perfect prediction
-    print('Variance score: %.2f' % r2_score(y_test, y_fill))
-
-    mpl.style.use('bmh')
-    plt.figure()
-    plt.plot(y_fill - y_test, 'o')
-    plt.title('Residuals')
-
-    plt.figure()
-    plt.scatter(y_fill, y_test, color='black')
-    plt.title('Predicted vs. Actual')
-
-    plt.show()
 
 
 
