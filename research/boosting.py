@@ -24,7 +24,8 @@ def train_ada_boost_classifier(x_train, y_train, x_test, y_test, base_classifier
 
 
 #######################################################################
-def ada_boost_experiment(x_train, y_train, x_test, y_test, base_classifier, n_estimators, learning_rate_lower, learning_rate_upper, learning_rate_num, cv=True):
+def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classifier, 
+    n_estimators, learning_rate_lower, learning_rate_upper, learning_rate_num, comment='AdaBoostClassifier'):
 
     logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, base_classifier, n_es
     opt_ada_boost_params = grid_search.fit(x_train, y_train.values.flatten())
     logger.info("Best: [{:f}] using [{}]".format(opt_ada_boost_params.best_score_, opt_ada_boost_params.best_params_))
     breakpoint()
-    
+
     ##
     logger.info('Refit AdaBoostClassifier w/ best params from 5-fold CV')
     ada_boost_classifier = AdaBoostClassifier(
@@ -44,24 +45,6 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, base_classifier, n_es
         n_estimators=n_estimators, 
         learning_rate=opt_ada_boost_params.best_params_['learning_rate']
     )
-
-    if False:
-        ##
-        ada_boost_classifier = AdaBoostClassifier(
-            base_classifier,
-            n_estimators=n_estimators,
-            learning_rate=learning_rate
-        )
-
-        ##
-        logger.info('training AdaBoostClassifier, \n\t [{:d}] estimators, \n\t learning_rate [{:f}]'.format(n_estimators, learning_rate))
-        ada_boost_classifier.fit(x_train, y_train.values.flatten())
-        
-        ##
-        if cv: 
-            scores = cross_val_score(ada_boost_classifier, x_train, y_train.y.values.flatten(), cv=7)
-            logger.info('AdaBoostCVScores [{}]'.format(scores))
-
 
     ada_boost_classifier_test_accuracy = []
     for ada_boost_classifier_test_predict in ada_boost_classifier.staged_predict(x_test):
@@ -102,12 +85,14 @@ if __name__ == '__main__':
     from task2 import read_data 
     from data import create_validation_set
 
-    _, x_train, y_train, _, _  = read_data()
+    ##
+    logger = logging.getLogger(__name__)
+
+    ##
+    x_submit, x_train, y_train, _, _  = read_data()
     
     idx_oos_test = create_validation_set(
         y_train=y_train, 
-        validation_set_size=0.1, 
-        seed=12357, 
         imbalance=True
     )
 
@@ -117,20 +102,29 @@ if __name__ == '__main__':
     x_train.drop(idx_oos_test, inplace=True)
     y_train.drop(idx_oos_test, inplace=True)
 
-    base_classifier = DecisionTreeClassifier(max_depth=1)
-    n_estimators = 300
-    learning_rate_lower = -0.7
-    learning_rate_upper = -0.5
-    learning_rate_num = 5
-    ada_boost_experiment(
-        x_train, 
-        y_train, 
-        x_test, 
-        y_test, 
-        base_classifier, 
-        n_estimators, 
-        learning_rate_lower, 
-        learning_rate_upper, 
-        learning_rate_num, 
-        cv=False)
+    classifier_kwargs = dict(
+        base_classifier = DecisionTreeClassifier(max_depth=2),
+        x_train=x_train, 
+        y_train=y_train, 
+        x_test=x_test, 
+        y_test=y_test,
+        x_submit=x_submit,     
+        n_estimators = 600,
+        learning_rate_lower = -3,
+        learning_rate_upper = -0.5,
+        learning_rate_num = 5,
+    )
+
+    args_to_report = [
+        'n_estimators',
+        'learning_rate_lower',
+        'learning_rate_upper',
+        'learning_rate_num',
+    ]
+
+    comment_kwargs = {key: classifier_kwargs[key] for key in args_to_report}
+
+    comment = 'AdaBoostClasifer_params_{}'.format(comment_kwargs)
+    logger.info('Running AdaBoostClassifier w/ parameters defined by: \n [{:s}]'.format(comment))
+    ada_boost_experiment(**classifier_kwargs, comment=comment)
 
