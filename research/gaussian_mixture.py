@@ -131,7 +131,7 @@ def gmm_experiment():
     samples_per_component = 1000
 
     xmat = numpy.vstack([
-        rs.multivariate_normal([50, 50], 100 * numpy.eye(2), samples_per_component), 
+        rs.multivariate_normal([75, 75], 100 * numpy.eye(2), samples_per_component), 
         rs.multivariate_normal([25, 25], 10  * numpy.eye(2), samples_per_component),]
     )
 
