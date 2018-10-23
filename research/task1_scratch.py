@@ -10,7 +10,7 @@ def gmm(X, model, n_components, prior, covariance_type):
 			n_components=n_components,
 			covariance_type=covariance_type,
 			max_iter=100
-		).fit(X)
+		).fit(X)mm_classifier
 	elif model == 'dirichlet_process_GMM':
 		if covariance_type=='diag' or covariance_type == 'spherical':
 			cov_prior = 1e0
