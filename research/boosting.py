@@ -59,6 +59,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
 
     ##
     logger.info('plotting results')
+    plt.ioff()
     plt.figure(figsize=(15, 15))
     plt.plot(
         range(1, ada_boost_classifier_num_trees + 1),
@@ -66,9 +67,10 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
          linestyle='dashed', label='AdaBoostClassifier with SAMME.R algo.'
     )
     plt.legend()
-    plt.ylabel('Test Error')
+    plt.ylabel('Balanced Accuracy Score')
     plt.xlabel('Number of Trees')
-    plt.show()
+    plt.savefig(os.path.join(dt.output_dir(), 'AdaBoostClassifierAccuracyEvolution_{:s}.png'.format(comment)))
+    plt.close(fig)    
 
 
 #######################################################################
