@@ -218,23 +218,33 @@ RELOAD = False
 ## RUN REGRESSION
 #######################################################################
 
-
 if __name__ == "__main__":
 
-    predictors = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'X_train.csv'), header=0, index_col=0)
-    zero_variance = predictors.columns[predictors.describe().transpose()['std']<1e-6]
-    predictors = predictors.reindex(columns=predictors.columns.difference(zero_variance))
-    all_features = predictors.columns
+    y_ = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'y_train.csv'), header=0, index_col=0)
+    x_ = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'X_train.csv'), header=0, index_col=0)
+    assert all(y_.index == x_.index)
 
-    test_predictors = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'X_test.csv'), header=0, index_col=0).reindex(columns=all_features)
-    response = pd.read_csv(os.path.join(dt.data_dir(), 'task1', 'y_train.csv'), header=0, index_col=0)
+    index_val = dt.create_validation_set(y_)
 
-    train_data_fname = 'train_data_F_%s-Z_%s.csv' % (T_FILL, Z)
-    train_data_r2_fname = 'train_data_r2_F_%s-Z_%s.csv' % (T_FILL, Z)
-    if RELOAD:
-        train_data, train_data_r2 = clean_data(predictors, response, zscore_threshold=Z, fill_mode=T_FILL)
-        train_data.to_csv(os.path.join(dt.output_dir(), train_data_fname), index=True, header=True)
-        train_data_r2.to_csv(os.path.join(dt.output_dir(), train_data_r2_fname), index=True, header=True)
+    y_train = y_.reindex(y_.index.difference(index_val))
+    x_train = x_.reindex(x_.index.difference(index_val))
+    assert all(y_train.index == x_train.index)
+
+    y_val = y_.reindex(index_val)
+    x_val = x_.reindex(index_val)
+    assert all(y_val.index == x_val.index)
+
+    zero_variance_cols = dt.small_variance_cols(x_train, threshold=1e-6)
+    all_features = x_train.columns.difference(zero_variance_cols)
+
+    dt.remove_outliers(x_train, zscore_threshold=Z)
+    print("filled")
+    filled = dt.fill_missing_with_ols(x_train, x_train)
+
+
+    train_data, train_data_r2 = clean_data(all_features, y_train, zscore_threshold=Z, fill_mode=T_FILL)
+    train_data.to_csv(os.path.join(dt.output_dir(), ), index=True, header=True)
+    train_data_r2.to_csv(os.path.join(dt.output_dir(), train_data_r2_fname), index=True, header=True)
 
     train_data = pd.read_csv(os.path.join(dt.output_dir(), train_data_fname), header=0, index_col=0)
     train_data_r2 = pd.read_csv(os.path.join(dt.output_dir(), train_data_r2_fname), header=0, index_col=0)['r2']
