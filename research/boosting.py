@@ -8,6 +8,7 @@ THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(THIS_DIR, '..'))
 
 import matplotlib.pyplot as plt 
+import data as dt
 
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import accuracy_score
@@ -28,29 +29,39 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
     n_estimators, learning_rate_lower, learning_rate_upper, learning_rate_num, comment='AdaBoostClassifier'):
 
     logger = logging.getLogger(__name__)
+    rs = numpy.random.RandomState(12357)
 
+    ##
     learning_rate = numpy.logspace(learning_rate_lower, learning_rate_upper, learning_rate_num)
-    model = AdaBoostClassifier(base_classifier, n_estimators=n_estimators)
-    param_grid = dict(learning_rate=learning_rate)
-    kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=7)
-    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=-1, cv=kfold)
+    model = AdaBoostClassifier(base_classifier)
+    param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
+    kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=rs)
+    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=6, cv=kfold)
     opt_ada_boost_params = grid_search.fit(x_train, y_train.values.flatten())
     logger.info("Best: [{:f}] using [{}]".format(opt_ada_boost_params.best_score_, opt_ada_boost_params.best_params_))
-    breakpoint()
 
     ##
     logger.info('Refit AdaBoostClassifier w/ best params from 5-fold CV')
     ada_boost_classifier = AdaBoostClassifier(
         base_classifier, 
-        n_estimators=n_estimators, 
+        n_estimators=opt_ada_boost_params.best_params_['n_estimators'], 
         learning_rate=opt_ada_boost_params.best_params_['learning_rate']
     )
+    
+    ##
+    ada_boost_classifier.fit(x_train, y_train.values.flatten())
+    score = balanced_accuracy_score(ada_boost_classifier.predict(x_test), y_test.values.flatten())
+    logger.info('Prediction score on validation set := [{:f}]'.format(score))
 
     ada_boost_classifier_test_accuracy = []
     for ada_boost_classifier_test_predict in ada_boost_classifier.staged_predict(x_test):
         ada_boost_classifier_test_accuracy.append(balanced_accuracy_score(
             y_true=ada_boost_classifier_test_predict, 
             y_pred=y_test.y.values.flatten()))
+
+    y_submit = ada_boost_classifier.predict(x_submit)
+    output = pandas.Series(y_submit, name='y')
+    output.to_csv(os.path.join(dt.output_dir(), 'AdaBoost_{:s}.csv'.format(comment)), index=True, header=['y'], index_label=['id'])
 
     # Boosting might terminate early, but the following arrays are always
     # n_estimators long. We crop them to the actual number of trees here:
@@ -60,7 +71,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
     ##
     logger.info('plotting results')
     plt.ioff()
-    plt.figure(figsize=(15, 15))
+    fig = plt.figure(figsize=(15, 15))
     plt.plot(
         range(1, ada_boost_classifier_num_trees + 1),
          ada_boost_classifier_test_accuracy, c='black',
@@ -69,7 +80,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
     plt.legend()
     plt.ylabel('Balanced Accuracy Score')
     plt.xlabel('Number of Trees')
-    plt.savefig(os.path.join(dt.output_dir(), 'AdaBoostClassifierAccuracyEvolution_{:s}.png'.format(comment)))
+    plt.savefig(os.path.join(dt.output_dir(), 'AdaBoostEvol_{:s}.png'.format(comment)))
     plt.close(fig)    
 
 
@@ -111,10 +122,10 @@ if __name__ == '__main__':
         x_test=x_test, 
         y_test=y_test,
         x_submit=x_submit,     
-        n_estimators = 600,
+        n_estimators = [300, 400, 500, 600],
         learning_rate_lower = -3,
         learning_rate_upper = -0.5,
-        learning_rate_num = 5,
+        learning_rate_num = 10,
     )
 
     args_to_report = [
@@ -126,7 +137,7 @@ if __name__ == '__main__':
 
     comment_kwargs = {key: classifier_kwargs[key] for key in args_to_report}
 
-    comment = 'AdaBoostClasifer_params_{}'.format(comment_kwargs)
+    comment = 'params_{}'.format(comment_kwargs)
     logger.info('Running AdaBoostClassifier w/ parameters defined by: \n [{:s}]'.format(comment))
     ada_boost_experiment(**classifier_kwargs, comment=comment)
 
