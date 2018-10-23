@@ -54,5 +54,6 @@ if __name__ == '__main__':
     ##
     user = 'dpopov@student.ethz.ch'
     logger = logging.getLogger(__name__)
-    opt_params = cluster_tester(n=100, k=10)
+    opt_params = cluster_tester(n=3000, k=1000)
+    pandas.Series([1,2,3,4], index=[1,2,3,4]).to_csv(os.path.join(dt.output_dir(), 'euler_cluster_test_out.csv'))
     logger.info('{} <Job Done>'.format(user))
