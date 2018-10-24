@@ -12,7 +12,7 @@ THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 VALIDATION_SET_SIZE = 0.2
 SEED = 12357
-
+BALANCE=[0.125, 0.75, 0.125]
 
 """
 Task2 Notes:
@@ -85,9 +85,11 @@ def create_validation_set(y_train, validation_set_size=VALIDATION_SET_SIZE, seed
 		sample_counts = numpy.array([(y_train.y.reindex(idx) == i).sum() for i in sample_classes])
 		sample_ratios = sample_counts / len(y_train.y.reindex(idx))
 
+		"""
 		assert numpy.testing.assert_allclose(ratios, sample_ratios, rtol=1e-1) is None,\
 			'sampling produced inaccurate sample class proportions [{}] \n\
 			in comparison to train class proportions [{}]'.format(sample_ratios, ratios)
+		"""
 
 	else:
 		idx = y_train.y.sample(n=n, random_state=RandomState).index.values.astype(int)
