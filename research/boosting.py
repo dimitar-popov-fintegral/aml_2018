@@ -36,7 +36,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
     model = AdaBoostClassifier(base_classifier)
     param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
     kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=rs)
-    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=6, cv=kfold)
+    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=8, cv=kfold)
     opt_ada_boost_params = grid_search.fit(x_train, y_train.values.flatten())
     logger.info("Best: [{:f}] using [{}]".format(opt_ada_boost_params.best_score_, opt_ada_boost_params.best_params_))
 
@@ -122,10 +122,10 @@ if __name__ == '__main__':
         x_test=x_test, 
         y_test=y_test,
         x_submit=x_submit,     
-        n_estimators = [300, 400, 500, 600],
+        n_estimators = [100, 200, 300, 400, 500, 600],
         learning_rate_lower = -3,
         learning_rate_upper = -0.5,
-        learning_rate_num = 10,
+        learning_rate_num = 15,
     )
 
     args_to_report = [
