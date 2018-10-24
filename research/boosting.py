@@ -36,7 +36,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
     model = AdaBoostClassifier(base_classifier)
     param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
     kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=rs)
-    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=16, cv=kfold)
+    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=32, cv=kfold)
     opt_ada_boost_params = grid_search.fit(x_train, y_train.values.flatten())
     logger.info("Best: [{:f}] using [{}]".format(opt_ada_boost_params.best_score_, opt_ada_boost_params.best_params_))
 
@@ -122,10 +122,10 @@ if __name__ == '__main__':
         x_test=x_test, 
         y_test=y_test,
         x_submit=x_submit,     
-        n_estimators = [100, 200, 700, 800],
-        learning_rate_lower = -2,
-        learning_rate_upper = 0.2,
-        learning_rate_num = 15,
+        n_estimators = [600, 700, 800],
+        learning_rate_lower = 0,
+        learning_rate_upper = 0.3,
+        learning_rate_num = 10,
     )
 
     args_to_report = [
@@ -137,7 +137,7 @@ if __name__ == '__main__':
 
     comment_kwargs = {key: classifier_kwargs[key] for key in args_to_report}
 
-    comment = 'params_{}'.format(comment_kwargs)
+    comment = 'params_{}'.format(comment_kwargs).replace(' ', '').replace("'","")
     logger.info('Running AdaBoostClassifier w/ parameters defined by: \n [{:s}]'.format(comment))
     ada_boost_experiment(**classifier_kwargs, comment=comment)
 

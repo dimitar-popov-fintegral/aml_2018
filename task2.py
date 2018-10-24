@@ -50,4 +50,5 @@ if __name__ == '__main__':
 
     ##
     x_test, x_train, y_train, x_val, y_val = read_data()
+    idx = dt.create_validation_set(y_train, imbalance=True)
 
