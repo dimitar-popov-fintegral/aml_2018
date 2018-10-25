@@ -64,11 +64,12 @@ def create_validation_set(y_train, validation_set_size=VALIDATION_SET_SIZE, seed
     n=int(len(y_train.index) * validation_set_size)
 
 
-    if imbalance:
-        classes = y_train.y.unique()
-        counts = numpy.array([(y_train.y == i).sum() for i in classes])
-        ratios = counts / len(y_train.y)
-        num_samples = numpy.floor(n * ratios).astype(int)
+	if imbalance:
+		classes = y_train.y.unique()
+		logger.info('proposed class splits [{}]'.format(classes))
+		counts = numpy.array([(y_train.y == i).sum() for i in classes])
+		ratios = counts / len(y_train.y)
+		num_samples = numpy.floor(n * ratios).astype(int)
 
         logger.info('sampling for [{}] classes, in proportions [{}]'.format(len(classes), ratios))
 
