@@ -1,8 +1,12 @@
+import os
+import sys
+os.environ["MKL_NUM_THREADS"] = "1" 
+os.environ["NUMEXPR_NUM_THREADS"] = "1" 
+os.environ["OMP_NUM_THREADS"] = "1" 
+
 import numpy
 import pandas
 import logging 
-import os 
-import sys
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(THIS_DIR, '..'))
@@ -35,10 +39,12 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
     learning_rate = numpy.logspace(learning_rate_lower, learning_rate_upper, learning_rate_num)
     model = AdaBoostClassifier(base_classifier)
     param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
-    kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=rs)
+    kfold = StratifiedKFold(n_splits=4, shuffle=True, random_state=rs)
     grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=32, cv=kfold)
     opt_ada_boost_params = grid_search.fit(x_train, y_train.values.flatten())
     logger.info("Best: [{:f}] using [{}]".format(opt_ada_boost_params.best_score_, opt_ada_boost_params.best_params_))
+    check_score = balanced_accuracy_score(opt_ada_boost_params.best_model_.predict(x_test), y_test.values.flatten())
+    logger.info('Check prediction score on validation set := [{:f}]'.format(score))
 
     ##
     logger.info('Refit AdaBoostClassifier w/ best params from 5-fold CV')
@@ -122,9 +128,9 @@ if __name__ == '__main__':
         x_test=x_test, 
         y_test=y_test,
         x_submit=x_submit,     
-        n_estimators = [600, 700, 800],
-        learning_rate_lower = 0,
-        learning_rate_upper = 0.3,
+        n_estimators = [300, 800, 1300, 1800],
+        learning_rate_lower = -1,
+        learning_rate_upper = 0.4,
         learning_rate_num = 10,
     )
 
