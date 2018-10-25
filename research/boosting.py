@@ -1,5 +1,6 @@
 import os
 import sys
+
 os.environ["MKL_NUM_THREADS"] = "1" 
 os.environ["NUMEXPR_NUM_THREADS"] = "1" 
 os.environ["OMP_NUM_THREADS"] = "1" 
@@ -29,7 +30,7 @@ def train_ada_boost_classifier(x_train, y_train, x_test, y_test, base_classifier
 
 
 #######################################################################
-def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classifier, 
+def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classifier, max_depth, 
     n_estimators, learning_rate_lower, learning_rate_upper, learning_rate_num, comment='AdaBoostClassifier'):
 
     logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
 
     ##
     learning_rate = numpy.logspace(learning_rate_lower, learning_rate_upper, learning_rate_num)
-    model = AdaBoostClassifier(base_classifier)
+    model = AdaBoostClassifier(base_classifier(max_depth=max_depth))
     param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
     kfold = StratifiedKFold(n_splits=4, shuffle=True, random_state=rs)
     grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=48, cv=kfold, verbose=3)
@@ -48,7 +49,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
     logger.info('Check prediction score on validation set := [{:f}]'.format(check_score))
 
     ##
-    logger.info('Refit AdaBoostClassifier w/ best params from 5-fold CV')
+    logger.info('Refit AdaBoostClassifier w/ best params from CV')
     ada_boost_classifier = AdaBoostClassifier(
         base_classifier, 
         n_estimators=opt_ada_boost_params.best_params_['n_estimators'], 
@@ -127,19 +128,21 @@ if __name__ == '__main__':
     y_train.drop(idx_oos_test, inplace=True)
 
     classifier_kwargs = dict(
-        base_classifier = DecisionTreeClassifier(max_depth=2),
+        base_classifier = DecisionTreeClassifier(),
         x_train=x_train, 
         y_train=y_train, 
         x_test=x_test, 
         y_test=y_test,
-        x_submit=x_submit,     
-        n_estimators = [800, 1000, 1300, 1500],
-        learning_rate_lower = 0,
+        x_submit=x_submit,
+        max_depth=3,     
+        n_estimators = [800, 1000, 1500, 2000],
+        learning_rate_lower = -1,
         learning_rate_upper = 0.5,
         learning_rate_num = 15,
     )
 
     args_to_report = [
+        'max_depth'
         'n_estimators',
         'learning_rate_lower',
         'learning_rate_upper',
