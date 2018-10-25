@@ -132,9 +132,9 @@ if __name__ == '__main__':
         x_test=x_test, 
         y_test=y_test,
         x_submit=x_submit,     
-        n_estimators = [300, 800, 1300, 1800],
-        learning_rate_lower = -1,
-        learning_rate_upper = 0.4,
+        n_estimators = [800, 1000, 1300, 1500],
+        learning_rate_lower = 0,
+        learning_rate_upper = 0.3,
         learning_rate_num = 10,
     )
 
