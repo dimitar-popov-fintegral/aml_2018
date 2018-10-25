@@ -142,7 +142,7 @@ if __name__ == '__main__':
     )
 
     args_to_report = [
-        'max_depth'
+        'max_depth',
         'n_estimators',
         'learning_rate_lower',
         'learning_rate_upper',
