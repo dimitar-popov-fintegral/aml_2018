@@ -40,11 +40,12 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
     model = AdaBoostClassifier(base_classifier)
     param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
     kfold = StratifiedKFold(n_splits=4, shuffle=True, random_state=rs)
-    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=32, cv=kfold, verbose=2)
+    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=48, cv=kfold, verbose=3)
     opt_ada_boost_params = grid_search.fit(x_train, y_train.values.flatten())
     logger.info("Best: [{:f}] using [{}]".format(opt_ada_boost_params.best_score_, opt_ada_boost_params.best_params_))
+
     check_score = balanced_accuracy_score(opt_ada_boost_params.predict(x_test), y_test.values.flatten())
-    logger.info('Check prediction score on validation set := [{:f}]'.format(score))
+    logger.info('Check prediction score on validation set := [{:f}]'.format(check_score))
 
     ##
     logger.info('Refit AdaBoostClassifier w/ best params from 5-fold CV')
@@ -70,7 +71,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
     output.to_csv(os.path.join(dt.output_dir(), 'AdaBoost_{:s}.csv'.format(comment)), index=True, header=['y'], index_label=['id'])
 
     y_check_submit = opt_ada_boost_params.predict(x_submit)
-    output = pandas.Series(y_submit, name='y')
+    output = pandas.Series(y_check_submit, name='y')
     output.to_csv(os.path.join(dt.output_dir(), 'AdaCheck_{:s}.csv'.format(comment)), index=True, header=['y'], index_label=['id'])
 
     # Boosting might terminate early, but the following arrays are always
@@ -134,8 +135,8 @@ if __name__ == '__main__':
         x_submit=x_submit,     
         n_estimators = [800, 1000, 1300, 1500],
         learning_rate_lower = 0,
-        learning_rate_upper = 0.3,
-        learning_rate_num = 10,
+        learning_rate_upper = 0.5,
+        learning_rate_num = 15,
     )
 
     args_to_report = [
