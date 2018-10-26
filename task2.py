@@ -9,26 +9,21 @@ import data as dt
 #######################################################################
 def read_data():
 
+    ##
+    logger = logging.getLogger(__name__)
+    logger.info('Reading data for from [{}]'.format(dt.data_dir(), 'task2'))
     X_test  = pandas.read_csv(os.path.join(dt.data_dir(), 'task2', 'X_test.csv'), header=0, index_col=0)
     X_train = pandas.read_csv(os.path.join(dt.data_dir(), 'task2', 'X_train.csv'), header=0, index_col=0)
     y_train = pandas.read_csv(os.path.join(dt.data_dir(), 'task2', 'y_train.csv'), header=0, index_col=0)
 
+    ##
+    logger.info('Modify y_train to be of type <<int.>>')
     y_train.y = y_train.y.astype(int)
-
-    X_validate = pandas.read_csv(os.path.join(dt.data_dir(), 'task2', 'X_validate.csv'), header=0, index_col=0) 
-    y_validate = pandas.read_csv(os.path.join(dt.data_dir(), 'task2', 'y_validate.csv'), header=0, index_col=0) 
-
-    y_validate.y = y_validate.y.astype(int)
-
-    assert y_validate.index.isin(X_validate.index).all(),\
-        'validation set variables y, X have differences in index -> aborting'
 
     return \
     X_test,\
-    X_train.reindex(index=X_train.index.difference(X_validate.index)),\
-    y_train.reindex(index=y_train.index.difference(y_validate.index)),\
-    X_validate,\
-    y_validate
+    X_train,\
+    y_train,\
 
 
 #######################################################################

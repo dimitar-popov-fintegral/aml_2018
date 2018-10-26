@@ -5,6 +5,7 @@ os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1" 
 os.environ["OMP_NUM_THREADS"] = "1" 
 
+import logging
 import numpy
 import pandas
 import logging 
@@ -15,6 +16,7 @@ sys.path.append(os.path.join(THIS_DIR, '..'))
 import matplotlib.pyplot as plt 
 import data as dt
 
+from task2 import read_data 
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -23,38 +25,36 @@ from sklearn.model_selection import StratifiedKFold
 
 
 #######################################################################
-def train_ada_boost_classifier(x_train, y_train, x_test, y_test, max_depth,
-                               n_estimators, learning_rate_lower, learning_rate_upper, learning_rate_num, comment='AdaBoostClassifier'):
+def train_ada_boost_classifier(x_train, y_train, x_test, y_test, max_depth, class_weight, 
+                               n_estimators, learning_rate_lower, learning_rate_upper, 
+                               learning_rate_num, machines, comment='AdaBoostClassifier'):
 
     logger = logging.getLogger(__name__)
     rs = numpy.random.RandomState(12357)
 
     ##
+    logger.info('<--Spec model parameters-->')
     learning_rate = numpy.logspace(learning_rate_lower, learning_rate_upper, learning_rate_num)
-    model = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth))
+    model = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth, class_weight=class_weight))
     param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
-    kfold = StratifiedKFold(n_splits=4, shuffle=True, random_state=rs)
-    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=48, cv=kfold, verbose=3)
-    opt_ada_boost_params = grid_search.fit(x_train, y_train.values.flatten())
-    logger.info("Best: [{:f}] using [{}]".format(opt_ada_boost_params.best_score_, opt_ada_boost_params.best_params_))
+    kfold = StratifiedKFold(n_splits=4, random_state=rs)
+    
+    ##
+    logger.info('<--Start grid search over n_estimators and learning_rate-->')
+    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=machines, cv=kfold, verbose=3)
+    opt_model = grid_search.fit(x_train, y_train.values.flatten())
+    logger.info("Best score: [{:f}] using [{}]".format(opt_model.best_score_, opt_model.best_params_))
 
-    prediction = opt_ada_boost_params.predict(x_test)
+    ##
+    logger.info('<--Make prediction and write out-->')
+    prediction = opt_model.predict(x_test)
+    prediction_score = balanced_accuracy_score(prediction, y_test.values.flatten())
+    logger.info('Check prediction score on validation set := [{:f}]'.format(prediction_score))
 
-    check_score = balanced_accuracy_score(prediction, y_test.values.flatten())
-    logger.info('Check prediction score on validation set := [{:f}]'.format(check_score))
+    output = pandas.Series(prediction, name='y')
+    output.to_csv(os.path.join(dt.output_dir(), 'ABC_{:s}.csv'.format(comment)), index=True, header=['y'], index_label=['id'])
 
-    return prediction
-
-"""
-x_train, x_validate = choose_validation_set
-y_train, y_validate = choose_validation_set
-
-predict = train_ada_boost_classifier(x_train, y_train, x_validate, y_validate, CONST_PARAMS)
-
-predict = train_ada_boost_classifier(x_train+x_validate, y_train+y_validate, x_test, y_all_zeros, CONST_PARAMS)
-"""
-
-
+    return prediction, opt_model
 
 
 
@@ -135,38 +135,51 @@ if __name__ == '__main__':
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
     root.addHandler(ch) 
-
-    from task2 import read_data 
-    from data import create_validation_set
-
-    ##
     logger = logging.getLogger(__name__)
 
-    ##
-    x_submit, x_train, y_train, _, _  = read_data()
+    '''
+    Round 0: Data read in and validation split
+    '''
+    x_test, x_train, y_train = read_data()
+
+    y_train.sort_values(by='y', inplace=True)
+    x_train.reindex(index=y_train.index)
     
-    idx_oos_test = create_validation_set(
+    idx_oos_test = dt.create_validation_set(
         y_train=y_train, 
         imbalance=True
     )
 
-    x_test = x_train.reindex(idx_oos_test)
-    y_test = y_train.reindex(idx_oos_test)
-
-    x_train.drop(idx_oos_test, inplace=True)
-    y_train.drop(idx_oos_test, inplace=True)
-
+    '''
+    Round 1: Fit without validation set, check score against validation set 
+    '''
+    
+    ##
+    logger.debug('STRICTLY MODEL PARAMETERS - COMMON TO FIRST AND SECOND STAGE')
+    max_depth = 2
+    n_estimators = [400, 600, 800, 1000]
+    learning_rate_lower = -1
+    learning_rate_upper = 0.5
+    learning_rate_num = 15
+    machines = 48
+    class_weight = 'balanced'
+    # 'learning_rate': 2.1983926488622894, 'n_estimators': 1500
+    
     classifier_kwargs = dict(
-        x_train=x_train, 
-        y_train=y_train, 
-        x_test=x_test, 
-        y_test=y_test,
-        x_submit=x_submit,
-        max_depth=3,     
-        n_estimators = [800, 1000, 1500, 2000],
-        learning_rate_lower = -1,
-        learning_rate_upper = 0.5,
-        learning_rate_num = 15,
+        ## data
+        x_train=x_train.drop(idx_oos_test), 
+        y_train=y_train.drop(idx_oos_test), 
+        x_test=x_train.reindex(idx_oos_test), 
+        y_test=y_train.reindex(idx_oos_test),
+        ## params
+        max_depth=max_depth,     
+        n_estimators=n_estimators,
+        learning_rate_lower=learning_rate_lower,
+        learning_rate_upper=learning_rate_upper,
+        learning_rate_num=learning_rate_num,
+        class_weight=class_weight,
+        ## aux
+        machines = machines
     )
 
     args_to_report = [
@@ -178,8 +191,57 @@ if __name__ == '__main__':
     ]
 
     comment_kwargs = {key: classifier_kwargs[key] for key in args_to_report}
+    comment = 'first_{}'.format(comment_kwargs).replace(' ', '').replace("'","")
 
-    comment = 'params_{}'.format(comment_kwargs).replace(' ', '').replace("'","")
-    logger.info('Running AdaBoostClassifier w/ parameters defined by: \n [{:s}]'.format(comment))
-    ada_boost_experiment(**classifier_kwargs, comment=comment)
+    logger.info('Running First Stage AdaBoostClassifier, parameters defined by: \n\n [{:s} \n\n]'.format(comment))
+    prediction, model = train_ada_boost_classifier(**classifier_kwargs, comment=comment)
 
+    ##
+    classes = numpy.unique(prediction)
+    counts = numpy.array([(prediction == i).sum() for i in classes])
+    ratios = counts / len(prediction)
+    logger.info('<y-predict (w/o validation data) \n classes: [{}], \n class ratios [{}], \n class counts [{}]> \n'.format(classes, ratios, counts))
+    logger.info('Stage one model diagnostic \n\n')
+    print(model)
+
+    '''
+    Round 2: Fit with validation set, check score against naive classifier i.e. all zeros 
+    '''
+    classifier_kwargs = dict(
+        ## data
+        x_train=x_train, 
+        y_train=y_train, 
+        x_test=x_test, 
+        y_test=pandas.Series(0, name='y', index=x_test.index),
+        ## params
+        max_depth=max_depth,     
+        n_estimators = n_estimators,
+        learning_rate_lower = learning_rate_lower,
+        learning_rate_upper = learning_rate_upper,
+        learning_rate_num = learning_rate_num,
+        class_weight=class_weight,
+        ## aux
+        machines = machines
+    )
+
+    args_to_report = [
+        'max_depth',
+        'n_estimators',
+        'learning_rate_lower',
+        'learning_rate_upper',
+        'learning_rate_num',
+    ]
+
+    comment_kwargs = {key: classifier_kwargs[key] for key in args_to_report}
+    comment = 'second_{}'.format(comment_kwargs).replace(' ', '').replace("'","")
+
+    logger.info('Running Second Stage AdaBoostClassifier, parameters defined by: \n\n [{:s} \n\n]'.format(comment))
+    prediction, model = train_ada_boost_classifier(**classifier_kwargs, comment=comment)
+
+    ##
+    classes = numpy.unique(prediction)
+    counts = numpy.array([(prediction == i).sum() for i in classes])
+    ratios = counts / len(prediction)
+    logger.info('<y-predict (w/ validation data) \n classes: [{}], \n class ratios [{}], \n class counts [{}]> \n'.format(classes, ratios, counts))
+    logger.info('Stage one model diagnostic \n\n')
+    print(model)
