@@ -102,7 +102,7 @@ if __name__ == "__main__":
     assert all(x_test.columns == x_.columns)
 
     ## train / validate data
-    index_val = dt.create_validation_set(y_, imbalance=True)
+    index_val = dt.create_validation_set(y_, imbalance=True, enforce_imbalance_ratio=False)
 
     y_train = y_.reindex(y_.index.difference(index_val))
     x_train = x_.reindex(x_.index.difference(index_val))
@@ -123,8 +123,8 @@ if __name__ == "__main__":
 
     y_val_hat = pd.read_csv(validate_predict_file, header=None, sep=' ')[0]
     score = balanced_accuracy_score(y_true=y_val.values.flatten(), y_pred=y_val_hat.values.flatten())
-
     print("Balanced score: %s" % score)
+
     test_predict_file = run(all_train_file, test_file, balance=dt.BALANCE)
     test_predict = pd.read_csv(test_predict_file, header=None, sep=' ')[0]
     test_predict.name = 'y'

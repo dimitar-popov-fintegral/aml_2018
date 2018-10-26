@@ -52,10 +52,10 @@ def output_dir():
         os.mkdir(os.path.join(THIS_DIR, 'output'), mode=0o770)
 
     return os.path.join(THIS_DIR, 'output')
-    
+
 
 #######################################################################
-def create_validation_set(y_train, validation_set_size=VALIDATION_SET_SIZE, seed=SEED, imbalance=False):
+def create_validation_set(y_train, validation_set_size=VALIDATION_SET_SIZE, seed=SEED, imbalance=False, enforce_imbalance_ratio=True):
 
     logger = logging.getLogger(__name__)
 
@@ -64,12 +64,12 @@ def create_validation_set(y_train, validation_set_size=VALIDATION_SET_SIZE, seed
     n=int(len(y_train.index) * validation_set_size)
 
 
-    if imbalance:
-        classes = y_train.y.unique()
-        logger.info('proposed class splits [{}]'.format(classes))
-        counts = numpy.array([(y_train.y == i).sum() for i in classes])
-        ratios = counts / len(y_train.y)
-        num_samples = numpy.floor(n * ratios).astype(int)
+	if imbalance:
+		classes = y_train.y.unique()
+		logger.info('proposed class splits [{}]'.format(classes))
+		counts = numpy.array([(y_train.y == i).sum() for i in classes])
+		ratios = counts / len(y_train.y)
+		num_samples = numpy.floor(n * ratios).astype(int)
 
         logger.info('sampling for [{}] classes, in proportions [{}]'.format(len(classes), ratios))
 
@@ -86,11 +86,10 @@ def create_validation_set(y_train, validation_set_size=VALIDATION_SET_SIZE, seed
         sample_counts = numpy.array([(y_train.y.reindex(idx) == i).sum() for i in sample_classes])
         sample_ratios = sample_counts / len(y_train.y.reindex(idx))
 
-
-        assert numpy.testing.assert_allclose(ratios, sample_ratios, rtol=1e-1) is None,\
-            'sampling produced inaccurate sample class proportions [{}] \n\
-            in comparison to train class proportions [{}]'.format(sample_ratios, ratios)
-
+        if enforce_imbalance_ratio:
+            assert numpy.testing.assert_allclose(ratios, sample_ratios, rtol=1e-1) is None,\
+                'sampling produced inaccurate sample class proportions [{}] \n\
+                in comparison to train class proportions [{}]'.format(sample_ratios, ratios)
 
     else:
         idx = y_train.y.sample(n=n, random_state=RandomState).index.values.astype(int)
@@ -148,7 +147,7 @@ def fill_missing_with_ols(x_train, prior_data):
 
 #######################################################################
 def write_validation_set(x_train, y_train, suffix):
-    
+
     index = create_validation_set(y_train)
     x_train.reindex(index).to_csv(os.path.join(output_dir(), 'x_{}.csv'.format(suffix)), index=True)
     y_train.reindex(index).to_csv(os.path.join(output_dir(), 'y_{}.csv'.format(suffix)), index=True)
