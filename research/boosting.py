@@ -92,7 +92,7 @@ def train_ada_boost_classifier(x_train, y_train, x_test, y_test, max_depth,
 
 
 #######################################################################
-def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classifier, max_depth, 
+def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, max_depth, 
     n_estimators, learning_rate_lower, learning_rate_upper, learning_rate_num, comment='AdaBoostClassifier'):
 
     logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
 
     ##
     learning_rate = numpy.logspace(learning_rate_lower, learning_rate_upper, learning_rate_num)
-    model = AdaBoostClassifier(base_classifier(max_depth=max_depth))
+    model = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth))
     param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
     kfold = StratifiedKFold(n_splits=4, shuffle=True, random_state=rs)
     grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=48, cv=kfold, verbose=3)
@@ -113,7 +113,7 @@ def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, base_classi
     ##
     logger.info('Refit AdaBoostClassifier w/ best params from CV')
     ada_boost_classifier = AdaBoostClassifier(
-        base_classifier, 
+        DecisionTreeClassifier(max_depth=max_depth), 
         n_estimators=opt_ada_boost_params.best_params_['n_estimators'], 
         learning_rate=opt_ada_boost_params.best_params_['learning_rate']
     )
@@ -190,7 +190,6 @@ if __name__ == '__main__':
     y_train.drop(idx_oos_test, inplace=True)
 
     classifier_kwargs = dict(
-        base_classifier = DecisionTreeClassifier(),
         x_train=x_train, 
         y_train=y_train, 
         x_test=x_test, 
