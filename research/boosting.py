@@ -22,6 +22,8 @@ from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import StratifiedKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 
 
 #######################################################################
@@ -141,14 +143,21 @@ if __name__ == '__main__':
     Round 0: Data read in and validation split
     '''
     x_test, x_train, y_train = read_data()
-
-    y_train.sort_values(by='y', inplace=True)
-    x_train.reindex(index=y_train.index)
     
     idx_oos_test = dt.create_validation_set(
         y_train=y_train, 
         imbalance=True
     )
+
+    ##
+    explained = 0.99
+    scale = StandardScaler()
+    scale.fit(x_train)
+
+    pca = PCA(explained, whiten=True)
+    pca_x_train = pandas.DataFrame(pca.fit_transform(scale.transform(x_train.values)), index=x_train.index)
+    pca_n, pca_f = pca_x_train.shape
+    logger.info('number of factors [{:d}] to explain [{:f}] variance '.format(pca_f, explained))    
 
     '''
     Round 1: Fit without validation set, check score against validation set 
@@ -156,20 +165,20 @@ if __name__ == '__main__':
     
     ##
     logger.debug('STRICTLY MODEL PARAMETERS - COMMON TO FIRST AND SECOND STAGE')
-    max_depth = 2
-    n_estimators = [400, 600, 800, 1000]
-    learning_rate_lower = -1
-    learning_rate_upper = 0.5
-    learning_rate_num = 15
+    max_depth = 3
+    n_estimators = [400, 600, 800]
+    learning_rate_lower = -3
+    learning_rate_upper = -1
+    learning_rate_num = 20
     machines = 48
     class_weight = 'balanced'
     # 'learning_rate': 2.1983926488622894, 'n_estimators': 1500
     
     classifier_kwargs = dict(
         ## data
-        x_train=x_train.drop(idx_oos_test), 
+        x_train=pca_x_train.drop(index=idx_oos_test), 
         y_train=y_train.drop(idx_oos_test), 
-        x_test=x_train.reindex(idx_oos_test), 
+        x_test=pca_x_train.reindex(index=idx_oos_test), 
         y_test=y_train.reindex(idx_oos_test),
         ## params
         max_depth=max_depth,     
