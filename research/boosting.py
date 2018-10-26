@@ -165,10 +165,10 @@ if __name__ == '__main__':
     
     ##
     logger.debug('STRICTLY MODEL PARAMETERS - COMMON TO FIRST AND SECOND STAGE')
-    max_depth = 3
+    max_depth = 4
     n_estimators = [400, 600, 800]
     learning_rate_lower = -3
-    learning_rate_upper = -1
+    learning_rate_upper = -2
     learning_rate_num = 20
     machines = 48
     class_weight = 'balanced'
@@ -245,7 +245,7 @@ if __name__ == '__main__':
     comment = 'second_{}'.format(comment_kwargs).replace(' ', '').replace("'","")
 
     logger.info('Running Second Stage AdaBoostClassifier, parameters defined by: \n\n [{:s} \n\n]'.format(comment))
-    prediction, model = train_ada_boost_classifier(**classifier_kwargs, comment=comment)
+    # prediction, model = train_ada_boost_classifier(**classifier_kwargs, comment=comment)
 
     ##
     classes = numpy.unique(prediction)
