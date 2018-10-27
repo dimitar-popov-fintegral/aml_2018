@@ -174,41 +174,42 @@ if __name__ == '__main__':
     '''
     Round 2: Fit with validation set, check score against naive classifier i.e. all zeros 
     '''
-    classifier_kwargs = dict(
-        ## data
-        x_train=x_train, 
-        y_train=y_train, 
-        x_test=x_test, 
-        y_test=pandas.Series(0, name='y', index=x_test.index),
-        ## params
-        max_depth=max_depth,     
-        n_estimators = n_estimators,
-        learning_rate_lower = learning_rate_lower,
-        learning_rate_upper = learning_rate_upper,
-        learning_rate_num = learning_rate_num,
-        class_weight=class_weight,
-        ## aux
-        machines = machines
-    )
+    if False:
+        classifier_kwargs = dict(
+            ## data
+            x_train=x_train, 
+            y_train=y_train, 
+            x_test=x_test, 
+            y_test=pandas.Series(0, name='y', index=x_test.index),
+            ## params
+            max_depth=max_depth,     
+            n_estimators = n_estimators,
+            learning_rate_lower = learning_rate_lower,
+            learning_rate_upper = learning_rate_upper,
+            learning_rate_num = learning_rate_num,
+            class_weight=class_weight,
+            ## aux
+            machines = machines
+        )
 
-    args_to_report = [
-        'max_depth',
-        'n_estimators',
-        'learning_rate_lower',
-        'learning_rate_upper',
-        'learning_rate_num',
-    ]
+        args_to_report = [
+            'max_depth',
+            'n_estimators',
+            'learning_rate_lower',
+            'learning_rate_upper',
+            'learning_rate_num',
+        ]
 
-    comment_kwargs = {key: classifier_kwargs[key] for key in args_to_report}
-    comment = 'second_{}'.format(comment_kwargs).replace(' ', '').replace("'","")
+        comment_kwargs = {key: classifier_kwargs[key] for key in args_to_report}
+        comment = 'second_{}'.format(comment_kwargs).replace(' ', '').replace("'","")
 
-    logger.info('Running Second Stage AdaBoostClassifier, parameters defined by: \n\n [{:s} \n\n]'.format(comment))
-    # prediction, model = train_ada_boost_classifier(**classifier_kwargs, comment=comment)
+        logger.info('Running Second Stage AdaBoostClassifier, parameters defined by: \n\n [{:s} \n\n]'.format(comment))
+        prediction, model = train_ada_boost_classifier(**classifier_kwargs, comment=comment)
 
-    ##
-    classes = numpy.unique(prediction)
-    counts = numpy.array([(prediction == i).sum() for i in classes])
-    ratios = counts / len(prediction)
-    logger.info('<y-predict (w/ validation data) \n classes: [{}], \n class ratios [{}], \n class counts [{}]> \n'.format(classes, ratios, counts))
-    logger.info('Stage one model diagnostic \n\n')
-    print(model)
+        ##
+        classes = numpy.unique(prediction)
+        counts = numpy.array([(prediction == i).sum() for i in classes])
+        ratios = counts / len(prediction)
+        logger.info('<y-predict (w/ validation data) \n classes: [{}], \n class ratios [{}], \n class counts [{}]> \n'.format(classes, ratios, counts))
+        logger.info('Stage one model diagnostic \n\n')
+        print(model)
