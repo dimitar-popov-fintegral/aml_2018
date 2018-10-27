@@ -65,6 +65,9 @@ def train_ada_boost_classifier(x_train, y_train, x_test, y_test, max_depth, clas
 def grid_search_analysis(filename):
     
     ##
+    logger = logging.getLogger(__name__)
+    
+    ##
     logger.debug('Read and prepare cross validation score data')
     grid_search_data = pandas.read_csv(os.path.join(dt.output_dir(), filename), header=None, index_col=None)
     grid_search_data.iloc[:, :-1]
