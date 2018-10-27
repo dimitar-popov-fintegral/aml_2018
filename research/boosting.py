@@ -9,6 +9,7 @@ import logging
 import numpy
 import pandas
 import logging 
+import re 
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(THIS_DIR, '..'))
@@ -61,70 +62,28 @@ def train_ada_boost_classifier(x_train, y_train, x_test, y_test, max_depth, clas
 
 
 #######################################################################
-def ada_boost_experiment(x_train, y_train, x_test, y_test, x_submit, max_depth, 
-    n_estimators, learning_rate_lower, learning_rate_upper, learning_rate_num, comment='AdaBoostClassifier'):
-
-    logger = logging.getLogger(__name__)
-    rs = numpy.random.RandomState(12357)
-
-    ##
-    learning_rate = numpy.logspace(learning_rate_lower, learning_rate_upper, learning_rate_num)
-    model = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth))
-    param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
-    kfold = StratifiedKFold(n_splits=4, shuffle=True, random_state=rs)
-    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=48, cv=kfold, verbose=3)
-    opt_ada_boost_params = grid_search.fit(x_train, y_train.values.flatten())
-    logger.info("Best: [{:f}] using [{}]".format(opt_ada_boost_params.best_score_, opt_ada_boost_params.best_params_))
-
-    check_score = balanced_accuracy_score(opt_ada_boost_params.predict(x_test), y_test.values.flatten())
-    logger.info('Check prediction score on validation set := [{:f}]'.format(check_score))
-
-    ##
-    logger.info('Refit AdaBoostClassifier w/ best params from CV')
-    ada_boost_classifier = AdaBoostClassifier(
-        DecisionTreeClassifier(max_depth=max_depth), 
-        n_estimators=opt_ada_boost_params.best_params_['n_estimators'], 
-        learning_rate=opt_ada_boost_params.best_params_['learning_rate']
-    )
+def grid_search_analysis(filename):
     
     ##
-    ada_boost_classifier.fit(x_train, y_train.values.flatten())
-    score = balanced_accuracy_score(ada_boost_classifier.predict(x_test), y_test.values.flatten())
-    logger.info('Prediction score on validation set := [{:f}]'.format(score))
-
-    ada_boost_classifier_test_accuracy = []
-    for ada_boost_classifier_test_predict in ada_boost_classifier.staged_predict(x_test):
-        ada_boost_classifier_test_accuracy.append(balanced_accuracy_score(
-            y_true=ada_boost_classifier_test_predict, 
-            y_pred=y_test.y.values.flatten()))
-
-    y_submit = ada_boost_classifier.predict(x_submit)
-    output = pandas.Series(y_submit, name='y')
-    output.to_csv(os.path.join(dt.output_dir(), 'AdaBoost_{:s}.csv'.format(comment)), index=True, header=['y'], index_label=['id'])
-
-    y_check_submit = opt_y_check_submitada_boost_params.predict(x_submit)
-    output = pandas.Series(y_check_submit, name='y')
-    output.to_csv(os.path.join(dt.output_dir(), 'AdaCheck_{:s}.csv'.format(comment)), index=True, header=['y'], index_label=['id'])
-
-    # Boosting might terminate early, but the following arrays are always
-    # n_estimators long. We crop them to the actual number of trees here:
-    ada_boost_classifier_num_trees = len(ada_boost_classifier)
-    ada_boost_classifier_estimator_errors = ada_boost_classifier.estimator_errors_[:ada_boost_classifier_num_trees]
+    logger.debug('Read and prepare cross validation score data')
+    grid_search_data = pandas.read_csv(os.path.join(dt.output_dir(), filename), header=None, index_col=None)
+    grid_search_data.iloc[:, :-1]
+    grid_search_data.columns = ['learning_rate', 'n_estimators', 'score']
+    grid_search_data.loc[:, 'score']=grid_search_data.loc[:, 'score'].apply(lambda x: float((re.findall(r'[0.]\d+', x))[0]))
+    grid_search_data.loc[:, 'learning_rate']=grid_search_data.loc[:, 'learning_rate'].apply(lambda x: float((re.findall(r'[0.]\d+', x))[0]))
+    grid_search_data.loc[:, 'n_estimators']=grid_search_data.loc[:, 'n_estimators'].apply(lambda x: int((re.findall(r'\d+', x))[0]))
 
     ##
-    logger.info('plotting results')
-    plt.ioff()
-    fig = plt.figure(figsize=(15, 15))
-    plt.plot(
-        range(1, ada_boost_classifier_num_trees + 1),
-         ada_boost_classifier_test_accuracy, c='black',
-         linestyle='dashed', label='AdaBoostClassifier with SAMME.R algo.'
-    )
-    plt.legend()
-    plt.ylabel('Balanced Accuracy Score')
-    plt.xlabel('Number of Trees')
-    plt.savefig(os.path.join(dt.output_dir(), 'AdaBoostEvol_{:s}.png'.format(comment)))
-    plt.close(fig)    
+    logger.debug('Return table sorted by score')
+    result = grid_search_data.sort_values(by='score')
+    print(result)
+
+    ##
+    logger.debug('Analytics')
+    print(grid_search_data.groupby(('n_estimators', 'learning_rate')).mean().sort_values('score'))
+
+
+    return result
 
 
 #######################################################################
@@ -165,14 +124,13 @@ if __name__ == '__main__':
     
     ##
     logger.debug('STRICTLY MODEL PARAMETERS - COMMON TO FIRST AND SECOND STAGE')
-    max_depth = 4
+    max_depth = 2
     n_estimators = [400, 600, 800]
     learning_rate_lower = -3
     learning_rate_upper = -2
     learning_rate_num = 20
-    machines = 48
+    machines = 24
     class_weight = 'balanced'
-    # 'learning_rate': 2.1983926488622894, 'n_estimators': 1500
     
     classifier_kwargs = dict(
         ## data
