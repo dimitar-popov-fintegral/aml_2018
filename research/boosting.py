@@ -70,11 +70,11 @@ def grid_search_analysis(filename):
     ##
     logger.debug('Read and prepare cross validation score data')
     grid_search_data = pandas.read_csv(os.path.join(dt.output_dir(), filename), header=None, index_col=None)
-    grid_search_data.iloc[:, :-1]
+    grid_search_data = grid_search_data.iloc[:, :-1]
     grid_search_data.columns = ['learning_rate', 'n_estimators', 'score']
-    grid_search_data.loc[:, 'score']=grid_search_data.loc[:, 'score'].apply(lambda x: float((re.findall(r'[0.]\d+', x))[0]))
-    grid_search_data.loc[:, 'learning_rate']=grid_search_data.loc[:, 'learning_rate'].apply(lambda x: float((re.findall(r'[0.]\d+', x))[0]))
-    grid_search_data.loc[:, 'n_estimators']=grid_search_data.loc[:, 'n_estimators'].apply(lambda x: int((re.findall(r'\d+', x))[0]))
+    grid_search_data.loc[:, 'score'] = grid_search_data.loc[:, 'score'].apply(lambda x: float(*((re.findall(r'[0.]\d+', str(x))))))
+    grid_search_data.loc[:, 'learning_rate'] = grid_search_data.loc[:, 'learning_rate'].apply(lambda x: float(*((re.findall(r'[0.]\d+', str(x))))))
+    grid_search_data.loc[:, 'n_estimators'] = grid_search_data.loc[:, 'n_estimators'].apply(lambda x: int(*((re.findall(r'\d+', str(x))))))
 
     ##
     logger.debug('Return table sorted by score')
