@@ -112,9 +112,9 @@ if __name__ == '__main__':
     )
 
     ##
-    explained = 0.99
+    explained = 0.8
     scale = StandardScaler()
-    scale.fit(x_train)
+    scale.fit(pandas.concat([x_train, x_test], axis=0))
 
     pca = PCA(explained, whiten=True)
     pca_x_train = pandas.DataFrame(pca.fit_transform(scale.transform(x_train.values)), index=x_train.index)
@@ -128,11 +128,11 @@ if __name__ == '__main__':
     ##
     logger.debug('STRICTLY MODEL PARAMETERS - COMMON TO FIRST AND SECOND STAGE')
     max_depth = 2
-    n_estimators = [400, 600, 800]
+    n_estimators = [400, 600, 800, 1000]
     learning_rate_lower = -3
-    learning_rate_upper = -2
+    learning_rate_upper = -1.7
     learning_rate_num = 20
-    machines = 24
+    machines = 48
     class_weight = 'balanced'
     
     classifier_kwargs = dict(
@@ -177,12 +177,12 @@ if __name__ == '__main__':
     '''
     Round 2: Fit with validation set, check score against naive classifier i.e. all zeros 
     '''
-    if False:
+    if True:
         classifier_kwargs = dict(
             ## data
-            x_train=x_train, 
+            x_train=pca_x_train, 
             y_train=y_train, 
-            x_test=x_test, 
+            x_test=pandas.DataFrame(pca.transform(scale.transform(x_test)), index=x_test.index), 
             y_test=pandas.Series(0, name='y', index=x_test.index),
             ## params
             max_depth=max_depth,     
