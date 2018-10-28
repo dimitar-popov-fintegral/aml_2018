@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 
 
-grid_search = pd.read_csv(os.path.join(dt.output_dir(), 'svm_all_train.scale_grid_search'), header=None, index_col=None)
+grid_search = pd.read_csv(os.path.join(dt.output_dir(), 'svm_train.scale_grid_search'), header=None, index_col=None)
 
 
 x = grid_search.iloc[:, 0]

@@ -16,6 +16,9 @@ else:
     from queue import Queue
 
 import data as dt
+from research import svm_data as sdt
+BALANCE = sdt.BALANCE
+
 
 telnet_workers = []
 ssh_workers = []
@@ -291,7 +294,7 @@ class Worker(Thread):
         if options.grid_with_g:
             cmdline += ' -g {0} '.format(g)
 
-        weights = ["-w%s %s" % (k,v) for (k,v) in enumerate(dt.BALANCE)]
+        weights = ["-w%s %s" % (k,v) for (k,v) in enumerate(BALANCE)]
         cmdline += ' %s ' % " ".join(weights)
 
         cmdline += ' -v {0} {1} {2} '.format\

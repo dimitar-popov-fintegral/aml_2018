@@ -3,16 +3,11 @@ import logging
 import numpy
 from enum import Enum
 
-from scipy import stats
-import statsmodels.api as sm
-import numpy as np
-import pandas as pd
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 VALIDATION_SET_SIZE = 0.2
 SEED = 12357
-BALANCE=[0.125, 0.75, 0.125]
 
 """
 Task2 Notes:
@@ -95,21 +90,6 @@ def create_validation_set(y_train, validation_set_size=VALIDATION_SET_SIZE, seed
         idx = y_train.y.sample(n=n, random_state=RandomState).index.values.astype(int)
 
     return idx
-
-
-#######################################################################
-def small_variance_cols(x_train, threshold):
-
-    cols_std = x_train.describe().transpose()['std']
-    return cols_std[cols_std<threshold].index
-
-
-#######################################################################
-def remove_outliers(x_train, zscore_threshold):
-
-    for p in x_train.columns:
-        predictor = x_train[p]
-        predictor[abs(stats.zscore(predictor.fillna(predictor.mean()))) > zscore_threshold] = np.nan
 
 
 #######################################################################

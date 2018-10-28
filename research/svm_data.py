@@ -1,11 +1,30 @@
 import os
+import numpy as np
 import pandas as pd
 import data as dt
 import statsmodels.api as sm
+from scipy import stats
+
 
 from sklearn.decomposition import PCA
 
 Z = 2.5
+BALANCE=[0.125, 0.75, 0.125]
+
+
+#######################################################################
+def small_variance_cols(x_train, threshold):
+
+    cols_std = x_train.describe().transpose()['std']
+    return cols_std[cols_std<threshold].index
+
+
+#######################################################################
+def nan_outliers(x_train, zscore_threshold):
+
+    for p in x_train.columns:
+        predictor = x_train[p]
+        predictor[abs(stats.zscore(predictor.fillna(predictor.mean()))) > zscore_threshold] = np.nan
 
 
 #######################################################################
@@ -61,14 +80,14 @@ def read_data(clean=False, num_pca=None, num_el=None):
     assert all(X_test.columns == X.columns)
 
     if clean:
-        X = X.reindex(columns=X.columns.difference(dt.small_variance_cols(X,threshold=1e-6)))
+        X = X.reindex(columns=X.columns.difference(small_variance_cols(X,threshold=1e-6)))
         X_test = X_test.reindex(columns=X.columns)
 
-        dt.remove_outliers(X, zscore_threshold=Z)
+        nan_outliers(X, zscore_threshold=Z)
         standardize(X)
         fill_missing_predictors_with_ols(X)
 
-        dt.remove_outliers(X_test, zscore_threshold=Z)
+        nan_outliers(X_test, zscore_threshold=Z)
         standardize(X_test)
         fill_missing_predictors_with_ols(X_test)
 
