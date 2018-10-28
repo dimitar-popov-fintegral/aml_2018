@@ -64,12 +64,12 @@ def create_validation_set(y_train, validation_set_size=VALIDATION_SET_SIZE, seed
     n=int(len(y_train.index) * validation_set_size)
 
 
-	if imbalance:
-		classes = y_train.y.unique()
-		logger.info('proposed class splits [{}]'.format(classes))
-		counts = numpy.array([(y_train.y == i).sum() for i in classes])
-		ratios = counts / len(y_train.y)
-		num_samples = numpy.floor(n * ratios).astype(int)
+    if imbalance:
+        classes = y_train.y.unique()
+        logger.info('proposed class splits [{}]'.format(classes))
+        counts = numpy.array([(y_train.y == i).sum() for i in classes])
+        ratios = counts / len(y_train.y)
+        num_samples = numpy.floor(n * ratios).astype(int)
 
         logger.info('sampling for [{}] classes, in proportions [{}]'.format(len(classes), ratios))
 
@@ -110,39 +110,6 @@ def remove_outliers(x_train, zscore_threshold):
     for p in x_train.columns:
         predictor = x_train[p]
         predictor[abs(stats.zscore(predictor.fillna(predictor.mean()))) > zscore_threshold] = np.nan
-
-
-#######################################################################
-def fill_missing_with_ols(x_train, prior_data):
-
-    data = pd.DataFrame(index=x_train.index)
-
-    for p in x_train.columns:
-        print(p)
-
-        predictor = x_train[p]
-
-        missing_idx = predictor[predictor.isnull()].index
-        good_idx = predictor.index.difference(missing_idx)
-
-        X = prior_data
-        X = X.fillna(X.mean())
-
-        #X = (X-X.mean()/X.std())
-        lm = sm.OLS(predictor.reindex(good_idx).values,
-                    sm.add_constant(X.reindex(good_idx).values)).fit()
-
-        missing = pd.Series(name=p, index=missing_idx,
-                            data=lm.predict(sm.add_constant(X.reindex(missing_idx).values)))
-        predictor = pd.concat([predictor.reindex(good_idx), missing]).reindex(data.index)
-
-        predictor = (predictor-predictor.mean())/predictor.std()
-        assert not predictor.isnull().values.any()
-        assert all(predictor.index == data.index)
-        data = data.join(predictor, how='outer')
-
-    return data
-
 
 
 #######################################################################
