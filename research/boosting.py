@@ -28,9 +28,56 @@ from sklearn.decomposition import PCA
 
 
 #######################################################################
+def feature_selection(x_train, y_train, forest=False):
+
+    from sklearn.svm import SVC as SVC
+    from sklearn.ensemble import RandomForestClassifier as RandomForestClassifier
+    from sklearn.feature_selection import SelectFromModel as SelectFromModel
+
+    rs = numpy.random.RandomState(12357)
+
+    if forest:
+        logger.info('Random forest feature selector')
+        classifier_kwargs = dict(
+            n_estimators=100,
+            max_depth=3,
+            n_jobs=4,
+            class_weight='balanced'        
+        )
+
+        selector_kwargs = dict(
+            threshold='1.5*median'
+        )
+
+        feature_selector = SelectFromModel(RandomForestClassifier(**classifier_kwargs), **selector_kwargs)
+        feature_selector.fit(x_train, y_train)
+        
+        return feature_selector
+
+    else:
+        logger.info('SVC feature selector')
+        classifier_kwargs = dict(
+            C=1,
+            kernel='linear', 
+            class_weight='balanced', 
+            decision_function_shape='ovr',
+            random_state=rs
+        )
+
+        selector_kwargs = dict(
+            threshold='1.5*median'
+        )
+
+        feature_selector = SelectFromModel(SVC(**classifier_kwargs), **selector_kwargs)
+        feature_selector.fit(x_train, y_train)
+        
+        return feature_selector
+
+
+#######################################################################
 def train_ada_boost_classifier(x_train, y_train, x_test, y_test, max_depth, class_weight, 
                                n_estimators, learning_rate_lower, learning_rate_upper, 
-                               learning_rate_num, machines, comment='AdaBoostClassifier'):
+                               learning_rate_num, criterion, machines, comment='AdaBoostClassifier'):
 
     logger = logging.getLogger(__name__)
     rs = numpy.random.RandomState(12357)
@@ -38,7 +85,7 @@ def train_ada_boost_classifier(x_train, y_train, x_test, y_test, max_depth, clas
     ##
     logger.info('<--Spec model parameters-->')
     learning_rate = numpy.logspace(learning_rate_lower, learning_rate_upper, learning_rate_num)
-    model = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth, class_weight=class_weight))
+    model = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth, criterion=criterion, class_weight=class_weight))
     param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
     kfold = StratifiedKFold(n_splits=4, random_state=rs)
     
@@ -56,6 +103,10 @@ def train_ada_boost_classifier(x_train, y_train, x_test, y_test, max_depth, clas
 
     output = pandas.Series(prediction, name='y')
     output.to_csv(os.path.join(dt.output_dir(), 'ABC_{:s}.csv'.format(comment)), index=True, header=['y'], index_label=['id'])
+
+    ##
+    from sklearn.metrics import confusion_matrix as confusion_matrix
+    print(confusion_matrix(prediction, y_test.values.flatten(),labels=[0,1,2]))
 
     return prediction, opt_model
 
@@ -112,14 +163,27 @@ if __name__ == '__main__':
     )
 
     ##
-    explained = 0.8
+    explained = 0.5
     scale = StandardScaler()
     scale.fit(pandas.concat([x_train, x_test], axis=0))
 
     pca = PCA(explained, whiten=True)
     pca_x_train = pandas.DataFrame(pca.fit_transform(scale.transform(x_train.values)), index=x_train.index)
+    pca_x_test = pandas.DataFrame(pca.transform(scale.transform(x_test)), index=x_test.index)
     pca_n, pca_f = pca_x_train.shape
-    logger.info('number of factors [{:d}] to explain [{:f}] variance '.format(pca_f, explained))    
+    logger.info('number of factors [{:d}] to explain [{:f}] variance '.format(pca_f, explained))
+
+    ##
+    if False:
+        feature_selector_model = feature_selection(pca_x_train.values, y_train.y.values.flatten(), forest=False)    
+        n,k = feature_selector_model.transform(pca_x_train).shape
+        logger.info('number of factors [{:d}] after LinearSVC/RandomForestClassifier model'.format(int(k)))
+        pca_x_train = pandas.DataFrame(feature_selector_model.transform(pca_x_train), index=x_train.index)
+        pca_x_test = pandas.DataFrame(feature_selector_model.transform(pca_x_test), index=x_test.index)
+        check_n, check_k = feature_selector_model.transform(pca.transform(scale.transform(x_test))).shape
+
+        assert k == check_k,\
+            'error in feature selector model, train and test dimensions do not agree'
 
     '''
     Round 1: Fit without validation set, check score against validation set 
@@ -128,12 +192,13 @@ if __name__ == '__main__':
     ##
     logger.debug('STRICTLY MODEL PARAMETERS - COMMON TO FIRST AND SECOND STAGE')
     max_depth = 2
-    n_estimators = [400, 600, 800, 1000]
-    learning_rate_lower = -3
-    learning_rate_upper = -1.7
-    learning_rate_num = 20
-    machines = 48
-    class_weight = 'balanced'
+    n_estimators = [100]
+    learning_rate_lower = -2 #numpy.log10(0.008858667904100823)
+    learning_rate_upper = -2 #numpy.log10(0.008858667904100823)
+    learning_rate_num = 1
+    machines = 4
+    class_weight = {0:1, 1:0.10, 2:1}
+    criterion = 'entropy'
     
     classifier_kwargs = dict(
         ## data
@@ -142,12 +207,13 @@ if __name__ == '__main__':
         x_test=pca_x_train.reindex(index=idx_oos_test), 
         y_test=y_train.reindex(idx_oos_test),
         ## params
-        max_depth=max_depth,     
+        max_depth=max_depth, 
         n_estimators=n_estimators,
         learning_rate_lower=learning_rate_lower,
         learning_rate_upper=learning_rate_upper,
         learning_rate_num=learning_rate_num,
         class_weight=class_weight,
+        criterion=criterion,    
         ## aux
         machines = machines
     )
@@ -182,7 +248,7 @@ if __name__ == '__main__':
             ## data
             x_train=pca_x_train, 
             y_train=y_train, 
-            x_test=pandas.DataFrame(pca.transform(scale.transform(x_test)), index=x_test.index), 
+            x_test=pca_x_test, 
             y_test=pandas.Series(0, name='y', index=x_test.index),
             ## params
             max_depth=max_depth,     
@@ -191,6 +257,7 @@ if __name__ == '__main__':
             learning_rate_upper = learning_rate_upper,
             learning_rate_num = learning_rate_num,
             class_weight=class_weight,
+            criterion=criterion,    
             ## aux
             machines = machines
         )
