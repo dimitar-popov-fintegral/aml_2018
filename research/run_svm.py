@@ -93,72 +93,6 @@ def train_rbf(train_pathname, test_pathname, balance, c_range, g_range):
     return  predict_test_file
 
 
-def run_linear(train_pathname, test_pathname, balance):
-
-    # svm, grid, and gnuplot executable files
-    svmscale_exe = os.path.join(SVM_LIB_PATH, "svm-scale")
-    svmtrain_exe = os.path.join(SVM_LIB_PATH, "svm-train")
-    svmpredict_exe = os.path.join(SVM_LIB_PATH, "svm-predict")
-    check_py = os.path.join(SVM_LIB_PATH, 'tools', "checkdata.py")
-    grid_py = os.path.join(PROJECT_ROOT, 'research', "grid.py")
-
-    assert os.path.exists(svmscale_exe),"svm-scale executable not found"
-    assert os.path.exists(svmtrain_exe),"svm-train executable not found"
-    assert os.path.exists(svmpredict_exe),"svm-predict executable not found"
-    assert os.path.exists(grid_py),"grid.py not found"
-    assert os.path.exists(train_pathname),"training file not found"
-
-    file_name = train_pathname
-    scaled_file = file_name + ".scale"
-    model_file = file_name + ".model"
-    range_file = file_name + ".range"
-
-    file_name = test_pathname
-    assert os.path.exists(test_pathname),"testing file not found"
-    scaled_test_file = file_name + ".scale"
-    predict_test_file = file_name + ".predict"
-
-    print('Check input data...')
-    cmd = '{0} "{1}"'.format(os.path.abspath(check_py), train_pathname)
-    print("run [%s]" % cmd)
-    print(Popen(cmd, shell = True, stdout = PIPE).communicate()[0].decode())
-    cmd = '{0} "{1}"'.format(check_py, test_pathname)
-    print("run [%s]" % cmd)
-    print(Popen(cmd, shell = True, stdout = PIPE).communicate()[0].decode())
-
-
-    cmd = '{0} -s "{1}" "{2}" > "{3}"'.format(svmscale_exe, range_file, train_pathname, scaled_file)
-    print('Scaling training data...')
-    print("run [%s]" % cmd)
-    Popen(cmd, shell = True, stdout = PIPE).communicate()
-
-    if balance is not None:
-        weights = " ".join(["-w%s %s" % (k,v) for (k,v) in enumerate(balance)])
-    else:
-        weights = ""
-
-    cmd = '%s -t 0 %s "%s" "%s"' % (svmtrain_exe, weights,  scaled_file, model_file)
-    print('Training...')
-    print("run [%s]" % cmd)
-    Popen(cmd, shell = True, stdout = PIPE).communicate()
-
-    print('Output model: {0}'.format(model_file))
-
-    cmd = '{0} -r "{1}" "{2}" > "{3}"'.format(svmscale_exe, range_file, test_pathname, scaled_test_file)
-    print('Scaling testing data...')
-    print("run [%s]" % cmd)
-    Popen(cmd, shell = True, stdout = PIPE).communicate()
-
-    cmd = '{0} "{1}" "{2}" "{3}"'.format(svmpredict_exe, scaled_test_file, model_file, predict_test_file)
-    print('Testing...')
-    print("run [%s]" % cmd)
-    Popen(cmd, shell = True).communicate()
-
-    print('Output prediction: {0}'.format(predict_test_file))
-
-    return  predict_test_file
-
-
 def run_test(train_pathname, test_pathname, balance):
 
     # svm, grid, and gnuplot executable files
@@ -198,22 +132,24 @@ def run_test(train_pathname, test_pathname, balance):
     print("run [%s]" % cmd)
     Popen(cmd, shell = True, stdout = PIPE).communicate()
 
-    c = 1.8
-    g = -9.8
-
     weights =" ".join(["-w%s %s" % (k,v) for (k,v) in enumerate(balance)])
 
+    c = 1.8
+    g = -9.8
     cmd = '%s -c %s -g %s %s "%s" "%s"' % (svmtrain_exe,
                                            2**c,
                                            2**g,
                                            weights,
                                            scaled_file,model_file)
     """
+
     cmd = '%s -t 0 %s "%s" "%s"' % (svmtrain_exe,
                                     weights,
                                     scaled_file,
                                     model_file)
     """
+
+
     print('Training...')
     print("run [%s]" % cmd)
     Popen(cmd, shell = True, stdout = PIPE).communicate()
@@ -246,12 +182,7 @@ if __name__ == "__main__":
     result_file = os.path.join(dt.output_dir(), 'svm_result')
 
 
-    """
     X, y, X_test = sdt.read_data(clean=False, num_pca=None, num_el=None)
-    """
-    y = pd.read_csv(os.path.join(dt.output_dir(), 'y_input.csv'), header=0, index_col=0)
-    X = pd.read_csv(os.path.join(dt.output_dir(), 'X_input.csv'), header=0, index_col=0)
-    X_test = pd.read_csv(os.path.join(dt.output_dir(), 'X_test_input.csv'), header=0, index_col=0)
 
 
     index_val = dt.create_validation_set(y, imbalance=True, enforce_imbalance_ratio=False)
@@ -264,12 +195,12 @@ if __name__ == "__main__":
     X_val = X.reindex(index_val)
     assert all(y_val.index == X_val.index)
     assert all(X_val.columns == X_train.columns)
-    """
+
     sdt.write_libsvm_input(y_train, X_train, train_file)
     sdt.write_libsvm_input(y_val, X_val, validate_file)
     sdt.write_libsvm_input(y, X, all_train_file)
     sdt.write_libsvm_input(pd.Series(index=X_test.index, data=0), X_test, test_file)
-    """
+
 
     balance=[4.1, 0.81, 3.97]
 
@@ -279,12 +210,48 @@ if __name__ == "__main__":
     score = balanced_accuracy_score(y_true=y_val.values.flatten(), y_pred=y_val_hat.values.flatten())
     print("Balanced score (test kernel): %s" % score)
 
+    ##IF metric not satisfactory terminate
+
     test_predict_file = run_test(all_train_file, test_file, balance=balance)
 
     test_predict = pd.read_csv(test_predict_file, header=None, sep=' ')[0]
     test_predict.name = 'y'
     test_predict.index.name = 'id'
     pd.DataFrame(test_predict).to_csv(result_file)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     """
 
