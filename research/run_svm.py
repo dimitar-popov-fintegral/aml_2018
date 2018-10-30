@@ -13,7 +13,7 @@ SVM_LIB_PATH = os.path.abspath(os.path.join(PROJECT_ROOT,'..','libsvm-3.23'))
 def _format_range_arg(input_range):
     return ",".join(["%s" % el for el in input_range])
 
-def run_rbf(train_pathname, test_pathname, balance, c_range, g_range):
+def train_rbf(train_pathname, test_pathname, balance, c_range, g_range):
 
     # svm, grid, and gnuplot executable files
     svmscale_exe = os.path.join(SVM_LIB_PATH, "svm-scale")
@@ -159,7 +159,7 @@ def run_linear(train_pathname, test_pathname, balance):
     return  predict_test_file
 
 
-def test_run(train_pathname, test_pathname, balance):
+def run_test(train_pathname, test_pathname, balance):
 
     # svm, grid, and gnuplot executable files
     svmscale_exe = os.path.join(SVM_LIB_PATH, "svm-scale")
@@ -198,15 +198,22 @@ def test_run(train_pathname, test_pathname, balance):
     print("run [%s]" % cmd)
     Popen(cmd, shell = True, stdout = PIPE).communicate()
 
-    c = 2
-    g = -12
+    c = 1.8
+    g = -9.8
 
     weights =" ".join(["-w%s %s" % (k,v) for (k,v) in enumerate(balance)])
+
     cmd = '%s -c %s -g %s %s "%s" "%s"' % (svmtrain_exe,
                                            2**c,
                                            2**g,
                                            weights,
                                            scaled_file,model_file)
+    """
+    cmd = '%s -t 0 %s "%s" "%s"' % (svmtrain_exe,
+                                    weights,
+                                    scaled_file,
+                                    model_file)
+    """
     print('Training...')
     print("run [%s]" % cmd)
     Popen(cmd, shell = True, stdout = PIPE).communicate()
@@ -239,10 +246,13 @@ if __name__ == "__main__":
     result_file = os.path.join(dt.output_dir(), 'svm_result')
 
 
-    #X, y, X_test = sdt.read_data(clean=True, num_pca=None, num_el=None)
+    """
+    X, y, X_test = sdt.read_data(clean=False, num_pca=None, num_el=None)
+    """
     y = pd.read_csv(os.path.join(dt.output_dir(), 'y_input.csv'), header=0, index_col=0)
     X = pd.read_csv(os.path.join(dt.output_dir(), 'X_input.csv'), header=0, index_col=0)
     X_test = pd.read_csv(os.path.join(dt.output_dir(), 'X_test_input.csv'), header=0, index_col=0)
+
 
     index_val = dt.create_validation_set(y, imbalance=True, enforce_imbalance_ratio=False)
 
@@ -254,7 +264,6 @@ if __name__ == "__main__":
     X_val = X.reindex(index_val)
     assert all(y_val.index == X_val.index)
     assert all(X_val.columns == X_train.columns)
-
     """
     sdt.write_libsvm_input(y_train, X_train, train_file)
     sdt.write_libsvm_input(y_val, X_val, validate_file)
@@ -262,48 +271,44 @@ if __name__ == "__main__":
     sdt.write_libsvm_input(pd.Series(index=X_test.index, data=0), X_test, test_file)
     """
 
-    balance=[4.2, 0.8, 3.95]
+    balance=[4.1, 0.81, 3.97]
 
 
-    """
-    validate_predict_file = test_run(train_file, validate_file, balance=balance)
+    validate_predict_file = run_test(train_file, validate_file, balance=balance)
     y_val_hat = pd.read_csv(validate_predict_file, header=None, sep=' ')[0]
     score = balanced_accuracy_score(y_true=y_val.values.flatten(), y_pred=y_val_hat.values.flatten())
     print("Balanced score (test kernel): %s" % score)
 
-    test_predict_file = test_run(all_train_file, test_file, balance=balance)
+    test_predict_file = run_test(all_train_file, test_file, balance=balance)
 
     test_predict = pd.read_csv(test_predict_file, header=None, sep=' ')[0]
     test_predict.name = 'y'
     test_predict.index.name = 'id'
     pd.DataFrame(test_predict).to_csv(result_file)
 
-
     """
 
-    c_range=(0,10,0.5)
-    g_range=(-6,-15,-0.5)
+    c_range=(1,3,0.2)
+    g_range=(-9,-13,-0.2)
 
-    validate_predict_file = run_rbf(train_file, validate_file,
-                                c_range=c_range,
-                                g_range=g_range,
-                                balance=balance)
+    validate_predict_file = train_rbf(train_file, validate_file,
+                                      c_range=c_range,
+                                      g_range=g_range,
+                                      balance=balance)
 
     y_val_hat = pd.read_csv(validate_predict_file, header=None, sep=' ')[0]
     score = balanced_accuracy_score(y_true=y_val.values.flatten(), y_pred=y_val_hat.values.flatten())
     print("Balanced score: %s" % score)
 
 
-    test_predict_file = run_rbf(all_train_file, test_file,
-                            c_range=c_range,
-                            g_range=g_range,
-                            balance=balance)
+    test_predict_file = train_rbf(all_train_file, test_file,
+                                  c_range=c_range,
+                                  g_range=g_range,
+                                  balance=balance)
 
     test_predict = pd.read_csv(test_predict_file, header=None, sep=' ')[0]
     test_predict.name = 'y'
     test_predict.index.name = 'id'
     pd.DataFrame(test_predict).to_csv(result_file)
-
-
-
+    """
 

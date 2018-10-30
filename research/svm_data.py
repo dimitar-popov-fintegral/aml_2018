@@ -8,7 +8,7 @@ from scipy import stats
 
 from sklearn.decomposition import PCA
 
-Z = 2.5
+Z = 2
 BALANCE=[0.125, 0.75, 0.125]
 
 

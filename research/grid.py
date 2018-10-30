@@ -17,12 +17,12 @@ else:
 
 import data as dt
 from research import svm_data as sdt
-BALANCE = sdt.BALANCE
+BALANCE = [4.2, 0.8, 3.95]
 
 
 telnet_workers = []
 ssh_workers = []
-nr_local_worker = 8
+nr_local_worker = 6
 
 class GridOption:
     def __init__(self, dataset_pathname, options):
