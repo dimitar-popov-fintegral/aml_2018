@@ -1,6 +1,7 @@
 import os
 import logging
 import numpy
+import pandas
 from enum import Enum
 
 
@@ -32,6 +33,7 @@ class Tasks(Enum):
     TASK0 = 'task0'
     TASK1 = 'task1'
     TASK2 = 'task2'
+    TASK3 = 'task3'
 
 
 #######################################################################
