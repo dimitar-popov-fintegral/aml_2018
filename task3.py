@@ -53,8 +53,8 @@ def prepare_data(small_sample=None):
 
     ##
     logger.debug('Fourier transform data')
-    freq_x_train_matrix, pow_x_train = fourier.prepare_frequency_data_set(X=x_train, sample_frequency=Frequency.HERTZ.value)
-    freq_x_test_matrix, pow_x_test = fourier.prepare_frequency_data_set(X=x_test, sample_frequency=Frequency.HERTZ.value)
+    freq_x_train_matrix, pow_x_train = fourier.prepare_frequency_data_set(X=x_train, sample_frequency=Frequency.HERTZ.value, normalize=False, scale=False)
+    freq_x_test_matrix, pow_x_test = fourier.prepare_frequency_data_set(X=x_test, sample_frequency=Frequency.HERTZ.value, normalize=False, scale=False)
 
     assert pow_x_test == pow_x_train
 
@@ -71,7 +71,7 @@ def pre_processing():
     """
     Step 0. Data
     """
-    x_train, x_test, y_train, freq_x_test, freq_x_train = prepare_data(small_sample=2600)
+    x_train, x_test, y_train, freq_x_test, freq_x_train = prepare_data(small_sample=1000)
 
     idx_oos_test = dt.create_validation_set(
         y_train=y_train, 
@@ -113,37 +113,35 @@ def pre_processing():
             'error in feature selector model, train and test dimensions do not agree'
 
     if True:
-        bins = 2**9
+        bins = 2**8
         density = True
+        _,K = freq_x_train.shape 
 
         ##
-        def surrogate_function(x, bins, density):
-            histogram, _ = numpy.histogram(x, bins=bins, density=density)
-            return histogram
-        
-        ##
-        res = numpy.apply_along_axis(surrogate_function, 1, freq_x_train.values, bins=bins, density=density)
+        def bound_functor(x):
+            return x.reshape(bins, K//bins).mean(-1)
+
+        res = numpy.apply_along_axis(bound_functor, arr=freq_x_train, axis=1)        
         freq_x_train = pandas.DataFrame(res, index=freq_x_train.index)
         del res
 
         ##
-        res = numpy.apply_along_axis(surrogate_function, 1, freq_x_val.values, bins=bins, density=density)
+        res = numpy.apply_along_axis(bound_functor, arr=freq_x_val, axis=1)        
         freq_x_val = pandas.DataFrame(res, index=freq_x_val.index)
         del res
 
         ##
-        res = numpy.apply_along_axis(surrogate_function, 1, freq_x_test.values, bins=bins, density=density)
+        res = numpy.apply_along_axis(bound_functor, arr=freq_x_test, axis=1)        
         freq_x_test = pandas.DataFrame(res, index=freq_x_test.index)
-        del res
+        del res, bound_functor
 
         assert freq_x_train.shape[1] == freq_x_test.shape[1]
         assert freq_x_train.shape[1] == freq_x_val.shape[1]
 
         logger.debug('binning reduced features to [{:d}]'.format(freq_x_train.shape[1]))
 
-        del surrogate_function
 
-    if False:
+    if True:
 
         """
         mask = freq_x_train.std() > freq_x_train.std().mean() + 0.00 * freq_x_train.std().std()
@@ -155,6 +153,10 @@ def pre_processing():
         """
         scale = StandardScaler()
         scale.fit(pandas.concat([freq_x_train, freq_x_test, freq_x_val], axis=0))
+
+        freq_x_train = scale.transform(freq_x_train)
+        freq_x_val = scale.transform(freq_x_val)
+        freq_x_test = scale.transform(freq_x_test)
 
     return freq_x_train, freq_x_val, freq_x_test, y_train, y_val
 
@@ -175,13 +177,13 @@ def svm_path():
     """
     logger.debug('STRICTLY MODEL PARAMETERS - COMMON TO FIRST AND SECOND STAGE')
 
-    c_penalty_lower = 0.6
-    c_penalty_upper = 0.6
-    c_penalty_num = 1
-    g_lower = None 
-    g_upper = None
-    g_num = None
-    class_weight =  {0:1.70715693, 1:6,  2:3.3986928, 3:14} #{0:2, 1:25, 2:4, 3:35} #'balanced' 
+    c_penalty_lower = 0
+    c_penalty_upper = 2
+    c_penalty_num = 10
+    g_lower = -1
+    g_upper = 0
+    g_num = 2
+    class_weight =  {0:1.68877888, 1:11.55079007,  2:3.47150611, 3:30.1}
     kernel = 'rbf'
     machines = 4
 
@@ -238,7 +240,7 @@ def ada_boost_path():
     """
     Step 1. Data and pre-processing 
     """
-    freq_x_train, freq_x_val, freq_x_test, y_train, y_val, y_test = pre_processing()
+    freq_x_train, freq_x_val, freq_x_test, y_train, y_val = pre_processing()
 
     """
     Step 2. Fitting (round 1) 
@@ -257,9 +259,9 @@ def ada_boost_path():
     
     classifier_kwargs = dict(
         ## data
-        x_train=freq_x_train.values, 
+        x_train=freq_x_train, 
         y_train=y_train, 
-        x_test=freq_x_val.values, 
+        x_test=freq_x_val, 
         y_test=y_val,
         ## params
         max_depth=max_depth, 
@@ -308,4 +310,4 @@ if __name__ == '__main__':
     root.addHandler(ch) 
 
     logger = logging.getLogger(__name__)
-    svm_path()
+    ada_boost_path()

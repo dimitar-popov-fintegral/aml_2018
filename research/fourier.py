@@ -67,7 +67,7 @@ def prepare_frequency_data_set(X, sample_frequency, normalize=True, scale=True, 
     Fourier transform 
     """
     logger.debug('running fourier transform')
-    def surrogate_function(x, sample_frequency, normalize=False, scale=True):
+    def surrogate_function(x, sample_frequency, normalize=normalize, scale=scale):
         frequency, magnitude = fourier_transform(x, sample_frequency, normalize, scale)
         return magnitude
     
