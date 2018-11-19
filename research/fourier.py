@@ -47,14 +47,18 @@ def prepare_frequency_data_set(X, sample_frequency, normalize=True, scale=True, 
     Band-pass filter 
     """
     logger.debug('running band-pass filter')
-    def surrogate_function(x):
-        ts = butter_bandpass_filter(x, low_cut, high_cut, sample_frequency, order=5)
+    def surrogate_function(x, low_cut, high_cut, sample_frequency, order=5):
+        ts = butter_bandpass_filter(x, low_cut, high_cut, sample_frequency, order)
         return ts
 
     X_padded = numpy.apply_along_axis(
         func1d=surrogate_function,
         axis=1,
         arr=X_padded.copy(),
+        low_cut=low_cut,
+        high_cut=high_cut,
+        sample_frequency=sample_frequency,
+        order=4
     )
 
     del surrogate_function
@@ -63,7 +67,7 @@ def prepare_frequency_data_set(X, sample_frequency, normalize=True, scale=True, 
     Fourier transform 
     """
     logger.debug('running fourier transform')
-    def surrogate_function(x):
+    def surrogate_function(x, sample_frequency, normalize=normalize, scale=scale):
         frequency, magnitude = fourier_transform(x, sample_frequency, normalize, scale)
         return magnitude
     
@@ -71,6 +75,7 @@ def prepare_frequency_data_set(X, sample_frequency, normalize=True, scale=True, 
         func1d=surrogate_function, 
         axis=1, 
         arr=X_padded, 
+        sample_frequency=sample_frequency
     )
 
     del surrogate_function
@@ -181,7 +186,7 @@ def plot_fourier_transform(x, sample_frequency, normalize=True, scale=True):
     """
 
     low_thresh = 0.67
-    high_thresh = 5
+    high_thresh = 25
     N = len(x)
     time_trace = numpy.linspace(0, N / sample_frequency, N)
     frequency, magnitude = fourier_transform(x, sample_frequency, normalize=normalize, scale=scale)    
@@ -276,12 +281,6 @@ if __name__ == '__main__':
 
     ##
     logging.info('<-- Fourier lib [sample] -->')
-    import data as dt
-
-    X = pandas.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_train.csv'), header=0, index_col=0, nrows=100)
-
-    plot_fourier_transform(X.iloc[0,:].dropna(), sample_frequency=300, normalize=True, scale=True)
-    dataset= prepare_frequency_data_set(X.iloc[0:3,:], sample_frequency=300, normalize=True, scale=True, low_cut=0.5, high_cut=25, pow2=None)
-
+    data_sample()
 
 
