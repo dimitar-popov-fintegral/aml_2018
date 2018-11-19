@@ -65,16 +65,7 @@ def standardize(X):
 
 
 #######################################################################
-def read_data(clean=False, num_pca=None, num_el=None):
-
-    y = pd.read_csv(os.path.join(dt.data_dir(), 'task2', 'y_train.csv'), header=0, index_col=0)
-    X = pd.read_csv(os.path.join(dt.data_dir(), 'task2', 'X_train.csv'), header=0, index_col=0)
-    X_test = pd.read_csv(os.path.join(dt.data_dir(), 'task2', 'X_test.csv'), header=0, index_col=0)
-
-    if num_el is not None:
-        y = y.iloc[:num_el,:]
-        X =  X.iloc[:num_el,:]
-        X_test = X_test.iloc[:num_el,:]
+def preprocess_data(y, X, X_test, clean=False, num_pca=None):
 
     assert all(y.index == X.index)
     assert all(X_test.columns == X.columns)
@@ -91,10 +82,10 @@ def read_data(clean=False, num_pca=None, num_el=None):
         standardize(X_test)
         fill_missing_predictors_with_ols(X_test)
 
-    if num_pca is not None:
-        standardize(X)
-        standardize(X_test)
+    standardize(X)
+    standardize(X_test)
 
+    if num_pca is not None:
         pca = PCA(n_components=num_pca)
         pca.fit(X)
         ev = pca.explained_variance_ratio_
@@ -106,10 +97,6 @@ def read_data(clean=False, num_pca=None, num_el=None):
 
     assert all(y.index == X.index)
     assert all(X_test.columns == X.columns)
-
-    y.to_csv(os.path.join(dt.output_dir(), 'y_input.csv'))
-    X.to_csv(os.path.join(dt.output_dir(), 'X_input.csv'))
-    X_test.to_csv(os.path.join(dt.output_dir(), 'X_test_input.csv'))
 
     return X, y, X_test
 
@@ -126,3 +113,64 @@ def write_libsvm_input(y, X, file_name):
                 row += "%s:%s " % (col_n+1, X.iloc[row_n, col_n])
             row += "\n"
             f.write(row)
+
+
+#######################################################################
+if __name__ == '__main__':
+
+    import sys
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+
+
+    import fourier
+    import arima
+    import bios
+
+    #nrows = 10
+    nrows = 3030+443+1474+170
+    regenerate = False
+
+    y = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'y_train.csv'), header=0, index_col=0, nrows=nrows)
+    _X = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_train.csv'), header=0, index_col=0, nrows=nrows)
+    _X_test = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_test.csv'), header=0, index_col=0, nrows=nrows)
+
+    if regenerate:
+        X_templates = bios.templates(_X)
+        X_test_templates = bios.templates(_X_test)
+        X_templates.to_csv(os.path.join(dt.data_dir(), 'task3', 'X_train_templates.csv'))
+        X_test_templates.to_csv(os.path.join(dt.data_dir(), 'task3', 'X_test_templates.csv'))
+        logger.info("Templates transform complete")
+
+    if regenerate:
+        X_fft = fourier.fft_features(_X, low_freq=1, high_freq = 30, n_bins=50)
+        X_test_fft = fourier.fft_features(_X_test, low_freq=1, high_freq = 30, n_bins=50)
+        X_fft.to_csv(os.path.join(dt.data_dir(), 'task3', 'X_train_fft.csv'))
+        X_test_fft.to_csv(os.path.join(dt.data_dir(), 'task3', 'X_test_fft.csv'))
+        logger.info("FFT transform complete")
+
+    if regenerate:
+        X_arima = arima.features(_X)
+        X_test_arima = arima.features(_X_test)
+        X_arima.to_csv(os.path.join(dt.data_dir(), 'task3', 'X_train_arima.csv'))
+        X_test_arima.to_csv(os.path.join(dt.data_dir(), 'task3', 'X_test_arima.csv'))
+        logger.info("ARIMA transform complete")
+
+
+    X_fft = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_train_fft.csv'), header=0, index_col=0, nrows=nrows)
+    X_test_fft = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_test_fft.csv'), header=0, index_col=0, nrows=nrows)
+
+    X_arima = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_train_arima.csv'), header=0, index_col=0, nrows=nrows)
+    X_test_arima = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_test_arima.csv'), header=0, index_col=0, nrows=nrows)
+
+    X = X_arima.join(X_fft)
+    X_test = X_test_arima.join(X_test_fft)
+    X, y, X_test = preprocess_data(y, X, X_test)

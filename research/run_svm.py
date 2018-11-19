@@ -2,6 +2,7 @@ import os
 from subprocess import *
 import pandas as pd
 from sklearn.metrics import balanced_accuracy_score
+from sklearn.metrics import f1_score
 import research.svm_data as sdt
 import data as dt
 
@@ -132,23 +133,24 @@ def run_test(train_pathname, test_pathname, balance):
     print("run [%s]" % cmd)
     Popen(cmd, shell = True, stdout = PIPE).communicate()
 
+
     weights =" ".join(["-w%s %s" % (k,v) for (k,v) in enumerate(balance)])
 
-    c = 1.8
-    g = -9.8
+
+    c = 9
+    g = 1
     cmd = '%s -c %s -g %s %s "%s" "%s"' % (svmtrain_exe,
                                            2**c,
                                            2**g,
                                            weights,
                                            scaled_file,model_file)
-    """
 
+    """
     cmd = '%s -t 0 %s "%s" "%s"' % (svmtrain_exe,
                                     weights,
                                     scaled_file,
                                     model_file)
     """
-
 
     print('Training...')
     print("run [%s]" % cmd)
@@ -181,9 +183,29 @@ if __name__ == "__main__":
     test_file = os.path.join(dt.output_dir(), 'svm_test')
     result_file = os.path.join(dt.output_dir(), 'svm_result')
 
+    #nrows = 100
+    nrows = 3030+443+1474+170
 
-    X, y, X_test = sdt.read_data(clean=False, num_pca=None, num_el=None)
+    y = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'y_train.csv'), header=0, index_col=0, nrows=nrows)
 
+    X_fft = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_train_fft.csv'), header=0, index_col=0, nrows=nrows)
+    X_test_fft = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_test_fft.csv'), header=0, index_col=0, nrows=nrows)
+
+    X_arima = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_train_arima.csv'), header=0, index_col=0, nrows=nrows)
+    X_test_arima = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_test_arima.csv'), header=0, index_col=0, nrows=nrows)
+
+    X_templates = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_train_templates.csv'), header=0, index_col=0, nrows=nrows)
+    X_test_templates = pd.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_test_templates.csv'), header=0, index_col=0, nrows=nrows)
+
+    X = X_arima.join(X_fft).join(X_templates)
+    X_test = X_test_arima.join(X_test_fft).join(X_test_templates)
+
+    #X = X_templates
+    #X_test = X_test_templates
+
+    X, y, X_test = sdt.preprocess_data(y=y, X=X, X_test=X_test, clean=False, num_pca=None)
+    X.fillna(value=0, inplace=True)
+    X_test.fillna(value=0, inplace=True)
 
     index_val = dt.create_validation_set(y, imbalance=True, enforce_imbalance_ratio=False)
 
@@ -201,81 +223,44 @@ if __name__ == "__main__":
     sdt.write_libsvm_input(y, X, all_train_file)
     sdt.write_libsvm_input(pd.Series(index=X_test.index, data=0), X_test, test_file)
 
+    #3030+443+1474+170
+    #ratio = [0.59214383, 0.08657416, 0.28805941, 0.03322259]
+    #balance = [0.04807648, 0.18675336, 0.06915993, 0.13301023] #0.620 on linear
 
-    balance=[4.1, 0.81, 3.97]
-
-
-    validate_predict_file = run_test(train_file, validate_file, balance=balance)
-    y_val_hat = pd.read_csv(validate_predict_file, header=None, sep=' ')[0]
-    score = balanced_accuracy_score(y_true=y_val.values.flatten(), y_pred=y_val_hat.values.flatten())
-    print("Balanced score (test kernel): %s" % score)
-
-    ##IF metric not satisfactory terminate
-
-    test_predict_file = run_test(all_train_file, test_file, balance=balance)
-
-    test_predict = pd.read_csv(test_predict_file, header=None, sep=' ')[0]
-    test_predict.name = 'y'
-    test_predict.index.name = 'id'
-    pd.DataFrame(test_predict).to_csv(result_file)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    balance = [0.03607648, 0.24675336, 0.07415993, 0.64301023]
 
     """
+    validate_predict_file = run_test(train_file, validate_file, balance=balance)
+    """
 
-    c_range=(1,3,0.2)
-    g_range=(-9,-13,-0.2)
-
+    c_range=(-5,15,2)
+    g_range=(3,-15,-2)
     validate_predict_file = train_rbf(train_file, validate_file,
                                       c_range=c_range,
                                       g_range=g_range,
                                       balance=balance)
 
+
     y_val_hat = pd.read_csv(validate_predict_file, header=None, sep=' ')[0]
     score = balanced_accuracy_score(y_true=y_val.values.flatten(), y_pred=y_val_hat.values.flatten())
-    print("Balanced score: %s" % score)
+    print("Balanced score (test): %s" % score)
 
+    F1 = f1_score(y_true=y_val.values.flatten(), y_pred=y_val_hat.values.flatten(), average='micro')
+    print("F1 score (test): %s" % F1)
 
+    ## TEST/RESULT
+    """
+    test_predict_file = run_test(all_train_file, test_file, balance=balance)
+    """
+
+    c_range=(-5,15,2)
+    g_range=(3,-15,-2)
     test_predict_file = train_rbf(all_train_file, test_file,
-                                  c_range=c_range,
-                                  g_range=g_range,
-                                  balance=balance)
+                                      c_range=c_range,
+                                      g_range=g_range,
+                                      balance=balance)
 
     test_predict = pd.read_csv(test_predict_file, header=None, sep=' ')[0]
     test_predict.name = 'y'
     test_predict.index.name = 'id'
     pd.DataFrame(test_predict).to_csv(result_file)
-    """
-

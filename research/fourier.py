@@ -11,8 +11,8 @@ os.environ["OMP_NUM_THREADS"] = "1"
 import logging
 import numpy
 import pandas
-import re
-import matplotlib.pyplot as plt 
+import scipy
+import matplotlib.pyplot as plt
 
 from scipy.signal import butter, lfilter
 
@@ -235,6 +235,42 @@ def plot_fourier_transform(x, sample_frequency, normalize=True, scale=True):
 
 
     return fig
+
+
+
+
+#######################################################################
+def coarse_fft(x, sample_frequency=300, low_freq=1.0, high_freq = 30, n_bins=50):
+
+    yf=scipy.fft(x.dropna())
+    yff = scipy.fftpack.fftfreq(yf.size, 1 / sample_frequency)
+    ss = pandas.Series(index=yff[:yff.size//2], data=abs(yf)[:yf.size//2])
+    ss = ss[(ss.index < high_freq) & (ss.index > low_freq)]
+    ss = ss/ss.sum()
+    ssd = pandas.DataFrame(ss).assign(bucket=pandas.cut(ss.index, n_bins)).groupby(by='bucket').mean()
+
+    return ssd/ssd.sum()
+
+
+#######################################################################
+def fft_features(X, sample_frequency=300, low_freq=1.0, high_freq = 30, n_bins=50):
+
+    logger = logging.getLogger(__name__)
+
+    ssds = pandas.DataFrame(index=range(n_bins))
+    for i in range(len(X)):
+        logger.info("processing serie: %d" % i)
+
+        ssd = coarse_fft(X.iloc[i,:], sample_frequency=sample_frequency, low_freq=low_freq, high_freq=high_freq, n_bins=n_bins)
+        ssd.index=range(n_bins)
+        ssds = ssds.assign(**{'%s' % i:ssd})
+
+    fftX = ssds.transpose()
+    fftX.columns = ['f%d' % i for i in fftX.columns]
+    fftX.index = [int(i) for i in fftX.index]
+    fftX.index.name='id'
+
+    return fftX
 
 
 #######################################################################
