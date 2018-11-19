@@ -14,6 +14,7 @@ import logging
 
 from enum import Enum
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import f1_score
 
 import data as dt
 import research.fourier as fourier
@@ -53,8 +54,23 @@ def prepare_data(small_sample=None):
 
     ##
     logger.debug('Fourier transform data')
-    freq_x_train_matrix, pow_x_train = fourier.prepare_frequency_data_set(X=x_train, sample_frequency=Frequency.HERTZ.value, normalize=False, scale=False)
-    freq_x_test_matrix, pow_x_test = fourier.prepare_frequency_data_set(X=x_test, sample_frequency=Frequency.HERTZ.value, normalize=False, scale=False)
+    freq_x_train_matrix, pow_x_train = fourier.prepare_frequency_data_set(
+        X=x_train, 
+        sample_frequency=Frequency.HERTZ.value, 
+        low_cut=0.67, 
+        high_cut=25, 
+        normalize=True, 
+        scale=True
+    )
+
+    freq_x_test_matrix, pow_x_test = fourier.prepare_frequency_data_set(
+        X=x_test, 
+        sample_frequency=Frequency.HERTZ.value, 
+        low_cut=0.67, 
+        high_cut=25, 
+        normalize=True, 
+        scale=True
+    )
 
     assert pow_x_test == pow_x_train
 
@@ -71,7 +87,7 @@ def pre_processing():
     """
     Step 0. Data
     """
-    x_train, x_test, y_train, freq_x_test, freq_x_train = prepare_data(small_sample=1000)
+    x_train, x_test, y_train, freq_x_test, freq_x_train = prepare_data(small_sample=1400)
 
     idx_oos_test = dt.create_validation_set(
         y_train=y_train, 
@@ -112,14 +128,13 @@ def pre_processing():
         assert k == check_k,\
             'error in feature selector model, train and test dimensions do not agree'
 
-    if True:
-        bins = 2**8
-        density = True
+    if False:
+        bins = 2**9
         _,K = freq_x_train.shape 
 
         ##
         def bound_functor(x):
-            return x.reshape(bins, K//bins).mean(-1)
+            return numpy.median(x.reshape(bins, K//bins), axis=-1)
 
         res = numpy.apply_along_axis(bound_functor, arr=freq_x_train, axis=1)        
         freq_x_train = pandas.DataFrame(res, index=freq_x_train.index)
@@ -143,14 +158,14 @@ def pre_processing():
 
     if True:
 
-        """
-        mask = freq_x_train.std() > freq_x_train.std().mean() + 0.00 * freq_x_train.std().std()
+        _, bins = freq_x_train.shape
+        mask = freq_x_train.std() > freq_x_train.std().mean() + 1 * freq_x_train.std().std()
         keep = mask[mask].index
         logger.debug('variance filter removed [{:d}] features and ended up with [{:d}]'.format(bins-len(keep), len(keep)))
         freq_x_train = freq_x_train.reindex(columns=keep)
         freq_x_test = freq_x_test.reindex(columns=keep)
         freq_x_val = freq_x_val.reindex(columns=keep)
-        """
+
         scale = StandardScaler()
         scale.fit(pandas.concat([freq_x_train, freq_x_test, freq_x_val], axis=0))
 
@@ -178,12 +193,12 @@ def svm_path():
     logger.debug('STRICTLY MODEL PARAMETERS - COMMON TO FIRST AND SECOND STAGE')
 
     c_penalty_lower = 0
-    c_penalty_upper = 2
+    c_penalty_upper = 5
     c_penalty_num = 10
-    g_lower = -1
-    g_upper = 0
-    g_num = 2
-    class_weight =  {0:1.68877888, 1:11.55079007,  2:3.47150611, 3:30.1}
+    g_lower = 0
+    g_upper = 5
+    g_num = 10
+    class_weight =  'balanced' #{0:0.00001, 1:3, 2:0.00002, 3:8} #{0:0.42219472, 1:2.88769752, 2:0.86787653, 3:7.525}
     kernel = 'rbf'
     machines = 4
 
@@ -228,7 +243,7 @@ def svm_path():
     ratios = counts / len(prediction)
     logger.info('<y-predict (w/o validation data) \n classes: [{}], \n class ratios [{}], \n class counts [{}]> \n'.format(classes, ratios, counts))
     logger.info('Stage one model diagnostic \n\n')
-    print(model)
+    logger.info(f1_score(y_val.y.values.flatten(), prediction), average='micro')    
 
 
 #######################################################################
@@ -295,7 +310,7 @@ def ada_boost_path():
     ratios = counts / len(prediction)
     logger.info('<y-predict (w/o validation data) \n classes: [{}], \n class ratios [{}], \n class counts [{}]> \n'.format(classes, ratios, counts))
     logger.info('Stage one model diagnostic \n\n')
-    print(model)
+    logger.info(f1_score(y_test.y.values.flatten(), prediction), average='micro')    
 
 
 #######################################################################
@@ -310,4 +325,4 @@ if __name__ == '__main__':
     root.addHandler(ch) 
 
     logger = logging.getLogger(__name__)
-    ada_boost_path()
+    svm_path()

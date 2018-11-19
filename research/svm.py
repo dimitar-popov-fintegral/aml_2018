@@ -43,7 +43,7 @@ def train_svm_classifier(x_train, y_train, x_test, y_test, machines,
         gamma = numpy.logspace(g_lower, g_upper, g_num)
         param_grid = dict(C=c_penalty, gamma=gamma)
 
-    kfold = StratifiedKFold(n_splits=4, random_state=rs)
+    kfold = StratifiedKFold(n_splits=3, random_state=rs)
     score = make_scorer(f1_score, average='micro')
     
 

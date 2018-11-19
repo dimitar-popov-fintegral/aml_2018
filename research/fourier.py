@@ -34,7 +34,7 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 
 
 #######################################################################
-def prepare_frequency_data_set(X, sample_frequency, normalize=True, scale=True, low_cut=0.5, high_cut=25, pow2=None):
+def prepare_frequency_data_set(X, sample_frequency, normalize=True, scale=True, low_cut=0.5, high_cut=15, pow2=None):
 
     ##
     logger = logging.getLogger(__name__)
@@ -47,40 +47,47 @@ def prepare_frequency_data_set(X, sample_frequency, normalize=True, scale=True, 
     Band-pass filter 
     """
     logger.debug('running band-pass filter')
-    def surrogate_function(x, low_cut, high_cut, sample_frequency, order=5):
-        ts = butter_bandpass_filter(x, low_cut, high_cut, sample_frequency, order)
+    def bounded_functor(x):
+        ts = butter_bandpass_filter(x, low_cut, high_cut, sample_frequency, order=5)
         return ts
 
-    X_padded = numpy.apply_along_axis(
-        func1d=surrogate_function,
+    X_filtered= numpy.apply_along_axis(
+        func1d=bounded_functor,
         axis=1,
         arr=X_padded.copy(),
-        low_cut=low_cut,
-        high_cut=high_cut,
-        sample_frequency=sample_frequency,
-        order=4
     )
 
-    del surrogate_function
+    del bounded_functor
 
     """
     Fourier transform 
     """
     logger.debug('running fourier transform')
-    def surrogate_function(x, sample_frequency, normalize=normalize, scale=scale):
+    def bounded_functor(x):
         frequency, magnitude = fourier_transform(x, sample_frequency, normalize, scale)
         return magnitude
     
     X_frequency_transformed = numpy.apply_along_axis(
-        func1d=surrogate_function, 
+        func1d=bounded_functor, 
         axis=1, 
-        arr=X_padded, 
-        sample_frequency=sample_frequency
+        arr=X_filtered, 
     )
 
-    del surrogate_function
+    del bounded_functor
 
-    return X_frequency_transformed, nearest_power
+    """
+    Restrict frequencies to window
+    """
+    N, K =  X_frequency_transformed.shape
+    tick_size_hz = sample_frequency / K  
+    high_freq_idx = numpy.int(numpy.floor(high_cut / tick_size_hz))
+    low_freq_idx = numpy.int(numpy.floor(low_cut / tick_size_hz))
+    assert high_freq_idx > low_freq_idx
+    deg = numpy.ceil(numpy.log2(high_freq_idx - low_freq_idx))
+    adj_high_freq_idx = low_freq_idx + numpy.int(2**(deg-1))
+    X_frequency_trimmed = X_frequency_transformed[:, low_freq_idx:adj_high_freq_idx]
+
+    return X_frequency_trimmed, nearest_power
 
 
 #######################################################################
@@ -88,7 +95,6 @@ def fourier_transform(x, sample_frequency, normalize=True, scale=True):
 
     N = len(x)
     T = 1 / sample_frequency
-    time_dimension = numpy.linspace(0, N / sample_frequency, N) 
     x_fft = numpy.fft.fft(x)
     x_frequency = numpy.linspace(0, 1 / T, N)
 
