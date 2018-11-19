@@ -11,8 +11,8 @@ os.environ["OMP_NUM_THREADS"] = "1"
 import logging
 import numpy
 import pandas
-import re
-import matplotlib.pyplot as plt 
+import scipy
+import matplotlib.pyplot as plt
 
 from scipy.signal import butter, lfilter
 
@@ -47,18 +47,14 @@ def prepare_frequency_data_set(X, sample_frequency, normalize=True, scale=True, 
     Band-pass filter 
     """
     logger.debug('running band-pass filter')
-    def surrogate_function(x, low_cut, high_cut, sample_frequency, order=5):
-        ts = butter_bandpass_filter(x, low_cut, high_cut, sample_frequency, order)
+    def surrogate_function(x):
+        ts = butter_bandpass_filter(x, low_cut, high_cut, sample_frequency, order=5)
         return ts
 
     X_padded = numpy.apply_along_axis(
         func1d=surrogate_function,
         axis=1,
         arr=X_padded.copy(),
-        low_cut=low_cut,
-        high_cut=high_cut,
-        sample_frequency=sample_frequency,
-        order=4
     )
 
     del surrogate_function
@@ -67,7 +63,7 @@ def prepare_frequency_data_set(X, sample_frequency, normalize=True, scale=True, 
     Fourier transform 
     """
     logger.debug('running fourier transform')
-    def surrogate_function(x, sample_frequency, normalize=False, scale=True):
+    def surrogate_function(x):
         frequency, magnitude = fourier_transform(x, sample_frequency, normalize, scale)
         return magnitude
     
@@ -75,7 +71,6 @@ def prepare_frequency_data_set(X, sample_frequency, normalize=True, scale=True, 
         func1d=surrogate_function, 
         axis=1, 
         arr=X_padded, 
-        sample_frequency=sample_frequency
     )
 
     del surrogate_function
@@ -186,7 +181,7 @@ def plot_fourier_transform(x, sample_frequency, normalize=True, scale=True):
     """
 
     low_thresh = 0.67
-    high_thresh = 25
+    high_thresh = 5
     N = len(x)
     time_trace = numpy.linspace(0, N / sample_frequency, N)
     frequency, magnitude = fourier_transform(x, sample_frequency, normalize=normalize, scale=scale)    
@@ -231,6 +226,42 @@ def plot_fourier_transform(x, sample_frequency, normalize=True, scale=True):
     return fig
 
 
+
+
+#######################################################################
+def coarse_fft(x, sample_frequency=300, low_freq=1.0, high_freq = 30, n_bins=50):
+
+    yf=scipy.fft(x.dropna())
+    yff = scipy.fftpack.fftfreq(yf.size, 1 / sample_frequency)
+    ss = pandas.Series(index=yff[:yff.size//2], data=abs(yf)[:yf.size//2])
+    ss = ss[(ss.index < high_freq) & (ss.index > low_freq)]
+    ss = ss/ss.sum()
+    ssd = pandas.DataFrame(ss).assign(bucket=pandas.cut(ss.index, n_bins)).groupby(by='bucket').mean()
+
+    return ssd/ssd.sum()
+
+
+#######################################################################
+def fft_features(X, sample_frequency=300, low_freq=1.0, high_freq = 30, n_bins=50):
+
+    logger = logging.getLogger(__name__)
+
+    ssds = pandas.DataFrame(index=range(n_bins))
+    for i in range(len(X)):
+        logger.info("processing serie: %d" % i)
+
+        ssd = coarse_fft(X.iloc[i,:], sample_frequency=sample_frequency, low_freq=low_freq, high_freq=high_freq, n_bins=n_bins)
+        ssd.index=range(n_bins)
+        ssds = ssds.assign(**{'%s' % i:ssd})
+
+    fftX = ssds.transpose()
+    fftX.columns = ['f%d' % i for i in fftX.columns]
+    fftX.index = [int(i) for i in fftX.index]
+    fftX.index.name='id'
+
+    return fftX
+
+
 #######################################################################
 if __name__ == '__main__':
 
@@ -245,6 +276,12 @@ if __name__ == '__main__':
 
     ##
     logging.info('<-- Fourier lib [sample] -->')
-    data_sample()
+    import data as dt
+
+    X = pandas.read_csv(os.path.join(dt.data_dir(), 'task3', 'X_train.csv'), header=0, index_col=0, nrows=100)
+
+    plot_fourier_transform(X.iloc[0,:].dropna(), sample_frequency=300, normalize=True, scale=True)
+    dataset= prepare_frequency_data_set(X.iloc[0:3,:], sample_frequency=300, normalize=True, scale=True, low_cut=0.5, high_cut=25, pow2=None)
+
 
 

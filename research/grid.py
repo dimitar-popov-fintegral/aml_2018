@@ -16,8 +16,7 @@ else:
     from queue import Queue
 
 import data as dt
-from research import svm_data as sdt
-BALANCE = [4.2, 0.8, 3.95]
+BALANCE = [0.03607648, 0.24675336, 0.07415993, 0.64301023]
 
 
 telnet_workers = []
