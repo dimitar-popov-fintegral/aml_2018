@@ -25,6 +25,8 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.metrics import f1_score, make_scorer
+
 
 
 #######################################################################
@@ -85,20 +87,21 @@ def train_ada_boost_classifier(x_train, y_train, x_test, y_test, max_depth, clas
     ##
     logger.info('<--Spec model parameters-->')
     learning_rate = numpy.logspace(learning_rate_lower, learning_rate_upper, learning_rate_num)
-    model = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth, criterion=criterion, class_weight=class_weight))
+    model = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth, criterion=criterion, class_weight=class_weight, random_state=rs))
     param_grid = dict(learning_rate=learning_rate, n_estimators=n_estimators)
     kfold = StratifiedKFold(n_splits=4, random_state=rs)
+    score = make_scorer(f1_score, average='micro')
     
     ##
     logger.info('<--Start grid search over n_estimators and learning_rate-->')
-    grid_search = GridSearchCV(model, param_grid, scoring="balanced_accuracy", n_jobs=machines, cv=kfold, verbose=3)
+    grid_search = GridSearchCV(model, param_grid, scoring=score, n_jobs=machines, cv=kfold, verbose=3)
     opt_model = grid_search.fit(x_train, y_train.values.flatten())
     logger.info("Best score: [{:f}] using [{}]".format(opt_model.best_score_, opt_model.best_params_))
 
     ##
     logger.info('<--Make prediction and write out-->')
     prediction = opt_model.predict(x_test)
-    prediction_score = balanced_accuracy_score(prediction, y_test.values.flatten())
+    prediction_score = f1_score(prediction, y_test.values.flatten(), average='micro')
     logger.info('Check prediction score on validation set := [{:f}]'.format(prediction_score))
 
     output = pandas.Series(prediction, name='y')
