@@ -286,17 +286,17 @@ def main():
     #################################
     ### subject one model prediction
     label = 'subject_1_%s_weighted_%s_epochs' % (type, epochs)
-    y_subject1_score = predict(X_test_A, X_test_B, model=subject1_model, type=type, weights=[1, 0.5, 1.5], label=label)
+    y_subject1_score = predict(X_test_A, X_test_B, model=subject1_model, type=type, weights=[1, 0.5, 2.5], label=label)
 
     #################################
     ### subject two model prediction
     label = 'subject_2_%s_weighted_%s_epochs' % (type, epochs)
-    y_subject2_score = predict(X_test_A, X_test_B, model=subject2_model, type=type, weights=[1, 0.5, 1.5], label=label)
+    y_subject2_score = predict(X_test_A, X_test_B, model=subject2_model, type=type, weights=[1, 0.5, 2.0], label=label)
 
     ###################################
     ### subject three model prediction
     label = 'subject_3_%s_weighted_%s_epochs' % (type, epochs)
-    y_subject3_score = predict(X_test_A, X_test_B, model=subject3_model, type=type, weights=[1, 0.5, 1.5], label=label)
+    y_subject3_score = predict(X_test_A, X_test_B, model=subject3_model, type=type, weights=[1, 0.5, 4.5], label=label)
 
     ##################################
     ### all subjects model prediction
@@ -320,7 +320,7 @@ def main():
     ##################################
     ### all subjects model prediction
     label = 'all_subjects_%s_weighted_%s_epochs' % (type, epochs)
-    y_score = (y_subject1_score * 0.33 + y_subject2_score * 0.33 + y_subject3_score * 0.33) * [1, 0.8, 1.5]
+    y_score = (y_subject1_score * 0 + y_subject2_score * 0.5 + y_subject3_score * 0.5) * [1.5, 0.8, 1.6]
     y_test = np.argmax(y_score, axis=1)
 
     result = pd.Series(y_test)
