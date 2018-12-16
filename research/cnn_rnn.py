@@ -74,12 +74,12 @@ def create_cnn_lstm_model(input_shape, n_classes):
     model.add(TimeDistributed(Dropout(0.25)))
 
     model.add(TimeDistributed(Flatten()))
-    model.add(LSTM(5, return_sequences=True))
+    model.add(LSTM(10, return_sequences=True))
     model.add(TimeDistributed(Dense(512, activation='relu')))
     model.add(TimeDistributed(Dropout(0.5)))
     model.add(TimeDistributed(Dense(n_classes, activation='softmax')))
 
-    model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     model.summary()
 
     return model
@@ -229,7 +229,7 @@ def main():
     N = 21600
     validate_size = 2000
     epochs = 50
-    type = ModelType.CNN
+    type = ModelType.CNN_LSTM
 
     ###################################
     ### Read train data and fit models
@@ -320,7 +320,7 @@ def main():
     ##################################
     ### all subjects model prediction
     label = 'all_subjects_%s_weighted_%s_epochs' % (type, epochs)
-    y_score = (y_subject1_score * 0 + y_subject2_score * 0.5 + y_subject3_score * 0.5) * [1.5, 0.8, 1.6]
+    y_score = (y_subject1_score * 0.5 + y_subject2_score * 0 + y_subject3_score * 0.5) * [1.5, 0.8, 1.6]
     y_test = np.argmax(y_score, axis=1)
 
     result = pd.Series(y_test)
